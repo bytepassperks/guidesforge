@@ -17,12 +17,17 @@ class GuideStepCreate(BaseModel):
 class GuideCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    steps: List[GuideStepCreate]
+    workspace_id: Optional[UUID] = None
+    staleness_detection_enabled: Optional[bool] = None
+    steps: Optional[List[GuideStepCreate]] = None
 
 
 class GuideUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    staleness_detection_enabled: Optional[bool] = None
+    is_public: Optional[bool] = None
+    help_center_published: Optional[bool] = None
 
 
 class GuideStepUpdate(BaseModel):
@@ -81,29 +86,16 @@ class GuideResponse(BaseModel):
 
 
 class GuideListResponse(BaseModel):
-    id: UUID
-    workspace_id: UUID
-    title: str
-    description: Optional[str] = None
-    status: str
-    staleness_score: float = 0.0
-    video_url: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    total_steps: int = 0
-    view_count: int = 0
-    is_public: bool = False
-    help_center_published: bool = False
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    guides: List[GuideResponse]
+    total: int
+    page: int
+    per_page: int
 
 
 class EmbedCodeResponse(BaseModel):
-    iframe_code: str
-    js_widget_code: str
-    guide_url: str
+    iframe: str
+    sdk: str
+    react: str
 
 
 class TrackViewRequest(BaseModel):
