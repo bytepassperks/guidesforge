@@ -50,20 +50,16 @@ vision_image = base_image.pip_install(
     "openai==1.50.0",
 )
 
-# Whisper image for audio transcription
+# Whisper image for audio transcription (uses OpenAI Whisper API)
 whisper_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
-        "torch==2.6.0",
-        "torchaudio==2.6.0",
-        "transformers==4.46.0",
-        "accelerate==1.0.0",
+        "openai==1.50.0",
         "requests==2.32.3",
         "boto3==1.35.0",
         "numpy==1.26.4",
-        "openai-whisper==20240930",
     )
-    .apt_install("ffmpeg", "libsndfile1")
+    .apt_install("ffmpeg")
 )
 
 # S3 configuration
@@ -573,7 +569,6 @@ def check_staleness(
 
 @app.function(
     image=whisper_image,
-    gpu="A10G",
     secrets=[modal.Secret.from_name("guidesforge-secrets")],
     timeout=300,
 )
@@ -582,39 +577,43 @@ def transcribe_audio(
     language: str = "en",
     guide_id: str = "",
 ) -> dict:
-    """Transcribe audio using Whisper large-v3. Returns transcription text and segments."""
-    import whisper
+    """Transcribe audio using OpenAI Whisper API. Returns transcription text and segments."""
+    from openai import OpenAI
 
     # Download audio file
     audio_path = tempfile.mktemp(suffix=".wav")
     download_from_url(audio_url, audio_path)
 
-    # Load Whisper model
-    model = whisper.load_model("large-v3", device="cuda")
+    # Transcribe via OpenAI Whisper API
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
 
-    # Transcribe
-    result = model.transcribe(
-        audio_path,
-        language=language if language != "auto" else None,
-        task="transcribe",
-        verbose=False,
-    )
+    with open(audio_path, "rb") as audio_file:
+        result = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            language=language if language != "auto" else None,
+            response_format="verbose_json",
+            timestamp_granularities=["segment"],
+        )
 
     os.unlink(audio_path)
 
     # Extract segments with timestamps
     segments = []
-    for seg in result.get("segments", []):
+    for seg in getattr(result, "segments", []) or []:
         segments.append({
-            "start": round(seg["start"], 2),
-            "end": round(seg["end"], 2),
-            "text": seg["text"].strip(),
+            "start": round(seg.get("start", 0), 2) if isinstance(seg, dict) else round(seg.start, 2),
+            "end": round(seg.get("end", 0), 2) if isinstance(seg, dict) else round(seg.end, 2),
+            "text": (seg.get("text", "") if isinstance(seg, dict) else seg.text).strip(),
         })
+
+    text = result.text.strip() if hasattr(result, "text") else str(result)
+    detected_lang = getattr(result, "language", language) or language
 
     # Upload transcript as JSON to S3
     transcript_data = {
-        "text": result["text"].strip(),
-        "language": result.get("language", language),
+        "text": text,
+        "language": detected_lang,
         "segments": segments,
     }
     transcript_path = tempfile.mktemp(suffix=".json")
@@ -626,8 +625,8 @@ def transcribe_audio(
     os.unlink(transcript_path)
 
     return {
-        "text": result["text"].strip(),
-        "language": result.get("language", language),
+        "text": text,
+        "language": detected_lang,
         "segments": segments,
         "transcript_url": transcript_url,
         "guide_id": guide_id,

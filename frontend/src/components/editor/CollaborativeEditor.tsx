@@ -1,6 +1,10 @@
 import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
+import Collaboration from "@tiptap/extension-collaboration"
 import Placeholder from "@tiptap/extension-placeholder"
+import { HocuspocusProvider } from "@hocuspocus/provider"
+import * as Y from "yjs"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Bold,
   Italic,
@@ -10,7 +14,11 @@ import {
   Undo,
   Redo,
   Code,
+  Users,
 } from "lucide-react"
+
+const HOCUSPOCUS_URL =
+  import.meta.env.VITE_HOCUSPOCUS_URL || "wss://guidesforge-hocuspocus.onrender.com"
 
 interface CollaborativeEditorProps {
   content: string
@@ -18,6 +26,8 @@ interface CollaborativeEditorProps {
   placeholder?: string
   className?: string
   editable?: boolean
+  documentName?: string
+  token?: string
 }
 
 export default function CollaborativeEditor({
@@ -26,18 +36,71 @@ export default function CollaborativeEditor({
   placeholder = "Start writing...",
   className = "",
   editable = true,
+  documentName,
+  token,
 }: CollaborativeEditorProps) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-      }),
+  const [connected, setConnected] = useState(false)
+  const [peerCount, setPeerCount] = useState(0)
+  const providerRef = useRef<HocuspocusProvider | null>(null)
+
+  // Create Yjs document and Hocuspocus provider when documentName is provided
+  const ydoc = useMemo(() => new Y.Doc(), [])
+
+  useEffect(() => {
+    if (!documentName) return
+
+    const provider = new HocuspocusProvider({
+      url: HOCUSPOCUS_URL,
+      name: documentName,
+      document: ydoc,
+      token: token || "",
+      onConnect: () => setConnected(true),
+      onDisconnect: () => setConnected(false),
+      onAwarenessChange: ({ states }: { states: unknown[] }) => {
+        setPeerCount(states.length)
+      },
+    })
+
+    providerRef.current = provider
+
+    return () => {
+      provider.destroy()
+      providerRef.current = null
+    }
+  }, [documentName, token, ydoc])
+
+  // Build extensions list based on whether collaboration is enabled
+  const extensions = useMemo(() => {
+    const baseConfig: Record<string, unknown> = {
+      heading: { levels: [2, 3] },
+    }
+    // Disable history when using collaboration (Yjs handles undo/redo)
+    if (documentName) {
+      baseConfig.history = false
+    }
+
+    const exts: Parameters<typeof useEditor>[0]["extensions"] = [
+      StarterKit.configure(baseConfig),
       Placeholder.configure({ placeholder }),
-    ],
-    content,
+    ]
+
+    if (documentName) {
+      exts.push(
+        Collaboration.configure({
+          document: ydoc,
+        })
+      )
+    }
+
+    return exts
+  }, [documentName, placeholder, ydoc])
+
+  const editor = useEditor({
+    extensions,
+    content: documentName ? undefined : content,
     editable,
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML())
+    onUpdate: ({ editor: e }) => {
+      onChange(e.getHTML())
     },
     editorProps: {
       attributes: {
@@ -101,6 +164,25 @@ export default function CollaborativeEditor({
           <Code className="w-3.5 h-3.5" />
         </ToolbarButton>
         <div className="flex-1" />
+        {/* Collaboration status indicator */}
+        {documentName && (
+          <div className="flex items-center gap-1.5 mr-2 text-xs">
+            <div
+              className={`w-1.5 h-1.5 rounded-full ${
+                connected ? "bg-green-400" : "bg-red-400"
+              }`}
+            />
+            <span className="text-gray-500">
+              {connected ? "Live" : "Offline"}
+            </span>
+            {peerCount > 1 && (
+              <span className="flex items-center gap-0.5 text-indigo-400">
+                <Users className="w-3 h-3" />
+                {peerCount}
+              </span>
+            )}
+          </div>
+        )}
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           active={false}
