@@ -22,7 +22,11 @@ class Settings(BaseSettings):
     MODAL_TOKEN_ID: str = os.getenv("MODAL_TOKEN_ID", "")
     MODAL_TOKEN_SECRET: str = os.getenv("MODAL_TOKEN_SECRET", "")
 
-    # Payments
+    # Payments - DodoPayments (primary gateway)
+    DODO_PAYMENTS_API_KEY: str = os.getenv("DODO_PAYMENTS_API_KEY", "")
+    DODO_PAYMENTS_WEBHOOK_KEY: str = os.getenv("DODO_PAYMENTS_WEBHOOK_KEY", "")
+
+    # Legacy payment gateways (kept for reference, DodoPayments replaces all)
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "")

@@ -1,4 +1,4 @@
-"""Billing routes - Stripe + Razorpay."""
+"""Billing routes - DodoPayments (primary) + legacy Stripe/Razorpay/Easebuzz."""
 import uuid
 from datetime import datetime
 
@@ -9,6 +9,7 @@ from app.config import settings
 from app.models.database import Subscription, User, Workspace, WorkspaceMember, get_db
 from app.schemas.billing import (
     CancelSubscriptionRequest,
+    DodoCheckoutRequest,
     EasebuzzCheckoutRequest,
     RazorpayCheckoutRequest,
     StripeCheckoutRequest,
@@ -18,6 +19,136 @@ from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
+
+# ---- DodoPayments (primary payment gateway) ----
+
+@router.post("/dodo/checkout")
+def create_dodo_checkout(
+    data: DodoCheckoutRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.dodo_service import create_checkout_session
+
+    ws = db.query(Workspace).filter(Workspace.id == data.workspace_id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    member = db.query(WorkspaceMember).filter(
+        WorkspaceMember.workspace_id == ws.id,
+        WorkspaceMember.user_id == current_user.id,
+        WorkspaceMember.role.in_(["owner", "admin"]),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="Only owners/admins can manage billing")
+
+    try:
+        result = create_checkout_session(
+            workspace_id=str(ws.id),
+            plan=data.plan,
+            interval=data.interval,
+            customer_email=current_user.email,
+            customer_name=current_user.full_name or "Customer",
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/dodo/webhook")
+async def dodo_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle DodoPayments webhook events.
+
+    Uses the official SDK for signature verification.
+    """
+    from app.services.dodo_service import verify_webhook
+
+    payload = await request.body()
+    headers = {
+        "webhook-id": request.headers.get("webhook-id", ""),
+        "webhook-signature": request.headers.get("webhook-signature", ""),
+        "webhook-timestamp": request.headers.get("webhook-timestamp", ""),
+    }
+
+    try:
+        event = verify_webhook(payload, headers)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Webhook verification failed: {e}")
+
+    event_type = event.get("type", "") if isinstance(event, dict) else getattr(event, "type", "")
+    event_data = event.get("data", {}) if isinstance(event, dict) else getattr(event, "data", {})
+    if not isinstance(event_data, dict):
+        event_data = {}
+
+    # Extract metadata
+    metadata = event_data.get("metadata", {})
+    workspace_id = metadata.get("workspace_id")
+    plan = metadata.get("plan")
+    interval = metadata.get("interval")
+
+    if event_type in ("subscription.active", "subscription.renewed"):
+        if workspace_id and plan:
+            sub = db.query(Subscription).filter(
+                Subscription.workspace_id == workspace_id
+            ).first()
+
+            subscription_id = event_data.get("subscription_id", "")
+
+            if sub:
+                sub.plan = plan
+                sub.provider = "dodopayments"
+                sub.provider_subscription_id = subscription_id
+                sub.status = "active"
+                sub.interval = interval or "monthly"
+                sub.currency = "usd"
+            else:
+                sub = Subscription(
+                    workspace_id=uuid.UUID(workspace_id),
+                    plan=plan,
+                    currency="usd",
+                    interval=interval or "monthly",
+                    provider="dodopayments",
+                    provider_subscription_id=subscription_id,
+                    status="active",
+                )
+                db.add(sub)
+
+            ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+            if ws:
+                owner = db.query(User).filter(User.id == ws.owner_id).first()
+                if owner:
+                    owner.plan = plan
+                    owner.plan_currency = "usd"
+
+            db.commit()
+
+    elif event_type in ("subscription.cancelled", "subscription.expired", "subscription.failed"):
+        subscription_id = event_data.get("subscription_id", "")
+        if subscription_id:
+            sub = db.query(Subscription).filter(
+                Subscription.provider_subscription_id == subscription_id
+            ).first()
+            if sub:
+                sub.status = "cancelled"
+                ws = db.query(Workspace).filter(Workspace.id == sub.workspace_id).first()
+                if ws:
+                    owner = db.query(User).filter(User.id == ws.owner_id).first()
+                    if owner:
+                        owner.plan = "free"
+                db.commit()
+
+    elif event_type == "payment.succeeded":
+        # Payment succeeded - subscription webhook will handle plan activation
+        pass
+
+    elif event_type == "payment.failed":
+        # Payment failed - log for monitoring
+        pass
+
+    return {"status": "ok"}
+
+
+# ---- Legacy payment gateways (Stripe/Razorpay/Easebuzz) ----
 
 @router.post("/stripe/checkout")
 def create_stripe_checkout(
@@ -393,7 +524,11 @@ def cancel_subscription(
         raise HTTPException(status_code=404, detail="No active subscription")
 
     try:
-        if sub.provider == "stripe":
+        if sub.provider == "dodopayments":
+            # DodoPayments handles subscription management
+            # Cancellation is handled via their customer portal
+            pass
+        elif sub.provider == "stripe":
             from app.services.stripe_service import cancel_subscription as stripe_cancel
             stripe_cancel(sub.provider_subscription_id)
         elif sub.provider == "razorpay":

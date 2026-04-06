@@ -12,6 +12,7 @@ python-multipart==0.0.12
 boto3==1.35.0
 stripe==11.1.0
 razorpay==1.4.2
+dodopayments>=1.93.0
 playwright==1.48.0
 pillow==11.0.0
 numpy==2.1.0

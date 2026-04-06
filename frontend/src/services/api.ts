@@ -120,6 +120,10 @@ export const workspacesAPI = {
 
 // Billing
 export const billingAPI = {
+  // DodoPayments - primary payment gateway
+  dodoCheckout: (data: { workspace_id: string; plan: string; interval: string }) =>
+    api.post("/api/billing/dodo/checkout", data),
+  // Legacy gateways (kept for backward compatibility)
   stripeCheckout: (data: { workspace_id: string; plan: string; interval: string }) =>
     api.post("/api/billing/stripe/checkout", data),
   razorpaySubscription: (data: { workspace_id: string; plan: string; interval: string }) =>

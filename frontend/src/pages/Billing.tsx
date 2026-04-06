@@ -9,7 +9,6 @@ import {
   Crown,
   Building2,
   Loader2,
-  ExternalLink,
   AlertCircle,
 } from "lucide-react"
 
@@ -25,8 +24,7 @@ const plans = [
   {
     id: "free",
     name: "Free",
-    priceUSD: 0,
-    priceINR: 0,
+    price: 0,
     icon: <Zap className="w-5 h-5" />,
     features: ["10 guides/month", "Video + Doc output", "Community support", "GuidesForge watermark"],
     limits: { guides: 10, seats: 1, mau: 0 },
@@ -34,8 +32,7 @@ const plans = [
   {
     id: "starter",
     name: "Starter",
-    priceUSD: 15,
-    priceINR: 999,
+    price: 15,
     icon: <Zap className="w-5 h-5" />,
     features: ["100 guides/month", "All 4 output formats", "SDK embed (100 MAU)", "Staleness alerts", "No watermark", "Email support"],
     limits: { guides: 100, seats: 2, mau: 100 },
@@ -43,8 +40,7 @@ const plans = [
   {
     id: "pro",
     name: "Pro",
-    priceUSD: 39,
-    priceINR: 2499,
+    price: 39,
     icon: <Crown className="w-5 h-5" />,
     features: ["Unlimited guides", "Voice cloning", "5 team seats", "SDK (1K MAU)", "Advanced analytics", "Tiptap editor", "Priority support"],
     limits: { guides: -1, seats: 5, mau: 1000 },
@@ -53,8 +49,7 @@ const plans = [
   {
     id: "business",
     name: "Business",
-    priceUSD: 99,
-    priceINR: 6999,
+    price: 99,
     icon: <Building2 className="w-5 h-5" />,
     features: ["Everything in Pro", "White-label branding", "10 team seats", "SDK (10K MAU)", "Custom domain", "SSO (SAML)", "Dedicated support"],
     limits: { guides: -1, seats: 10, mau: 10000 },
@@ -62,7 +57,6 @@ const plans = [
 ]
 
 export default function Billing() {
-  const [currency, setCurrency] = useState<"usd" | "inr">("usd")
   const [interval, setInterval] = useState<"monthly" | "yearly">("monthly")
   const [cancelReason, setCancelReason] = useState("")
   const [showCancel, setShowCancel] = useState(false)
@@ -73,44 +67,19 @@ export default function Billing() {
   })
   const workspace = workspacesData?.data?.[0]
 
-  const { data: subData, isLoading } = useQuery({
+  const { data: subData } = useQuery({
     queryKey: ["subscription", workspace?.id],
     queryFn: () => billingAPI.getSubscription(workspace!.id),
     enabled: !!workspace,
   })
   const subscription: Subscription | undefined = subData?.data
 
-  const stripeCheckout = useMutation({
+  const dodoCheckout = useMutation({
     mutationFn: (plan: string) =>
-      billingAPI.stripeCheckout({ workspace_id: workspace!.id, plan, interval }),
+      billingAPI.dodoCheckout({ workspace_id: workspace!.id, plan, interval }),
     onSuccess: (res) => {
       if (res.data.checkout_url) {
         window.location.href = res.data.checkout_url
-      }
-    },
-  })
-
-  const razorpayCheckout = useMutation({
-    mutationFn: (plan: string) =>
-      billingAPI.razorpaySubscription({ workspace_id: workspace!.id, plan, interval }),
-    onSuccess: (res) => {
-      if (res.data.subscription_id) {
-        // Razorpay checkout would open here
-        window.alert("Razorpay checkout: " + res.data.subscription_id)
-      }
-    },
-  })
-
-  const easebuzzCheckout = useMutation({
-    mutationFn: ({ plan, cur }: { plan: string; cur: string }) =>
-      billingAPI.easebuzzCheckout({ workspace_id: workspace!.id, plan, interval, currency: cur }),
-    onSuccess: (res) => {
-      if (res.data.access_key) {
-        // Seamless Easebuzz checkout - open in new window
-        const env = res.data.environment === "production" ? "pay" : "testpay"
-        window.location.href = `https://${env}.easebuzz.in/pay/${res.data.access_key}`
-      } else if (res.data.payment_url) {
-        window.location.href = res.data.payment_url
       }
     },
   })
@@ -122,8 +91,7 @@ export default function Billing() {
   })
 
   function handleUpgrade(planId: string) {
-    // Use Easebuzz for both INR and international payments
-    easebuzzCheckout.mutate({ plan: planId, cur: currency.toUpperCase() })
+    dodoCheckout.mutate(planId)
   }
 
   const currentPlan = subscription?.plan || "free"
@@ -173,22 +141,8 @@ export default function Billing() {
           </div>
         )}
 
-        {/* Currency & Interval toggle */}
+        {/* Interval toggle */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="flex bg-white/5 rounded-xl p-1">
-            <button
-              onClick={() => setCurrency("usd")}
-              className={`px-4 py-2 rounded-lg text-sm transition ${currency === "usd" ? "bg-indigo-500/10 text-indigo-400" : "text-gray-400"}`}
-            >
-              USD ($)
-            </button>
-            <button
-              onClick={() => setCurrency("inr")}
-              className={`px-4 py-2 rounded-lg text-sm transition ${currency === "inr" ? "bg-indigo-500/10 text-indigo-400" : "text-gray-400"}`}
-            >
-              INR (₹)
-            </button>
-          </div>
           <div className="flex bg-white/5 rounded-xl p-1">
             <button
               onClick={() => setInterval("monthly")}
@@ -203,16 +157,15 @@ export default function Billing() {
               Yearly <span className="text-xs text-green-400 ml-1">-20%</span>
             </button>
           </div>
+          <p className="text-xs text-gray-500">Powered by DodoPayments — 150+ countries, 80+ currencies auto-detected</p>
         </div>
 
         {/* Plans grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           {plans.map((plan) => {
             const isCurrentPlan = currentPlan === plan.id
-            const price = currency === "usd" ? plan.priceUSD : plan.priceINR
-            const yearlyPrice = interval === "yearly" ? Math.floor(price * 12 * 0.8) : null
-            const symbol = currency === "usd" ? "$" : "₹"
-            const displayPrice = interval === "yearly" ? Math.floor((yearlyPrice || 0) / 12) : price
+            const yearlyPrice = interval === "yearly" ? Math.floor(plan.price * 12 * 0.8) : null
+            const displayPrice = interval === "yearly" ? Math.floor((yearlyPrice || 0) / 12) : plan.price
 
             return (
               <div
@@ -235,10 +188,10 @@ export default function Billing() {
                   <h3 className="text-sm font-semibold text-white">{plan.name}</h3>
                 </div>
                 <div className="mb-4">
-                  <span className="text-2xl font-bold text-white">{symbol}{displayPrice}</span>
-                  {plan.priceUSD > 0 && <span className="text-gray-500 text-sm">/mo</span>}
-                  {interval === "yearly" && plan.priceUSD > 0 && (
-                    <p className="text-xs text-gray-500 mt-0.5">Billed {symbol}{yearlyPrice}/year</p>
+                  <span className="text-2xl font-bold text-white">${displayPrice}</span>
+                  {plan.price > 0 && <span className="text-gray-500 text-sm">/mo</span>}
+                  {interval === "yearly" && plan.price > 0 && (
+                    <p className="text-xs text-gray-500 mt-0.5">Billed ${yearlyPrice}/year</p>
                   )}
                 </div>
                 <ul className="space-y-2 mb-5">
@@ -256,14 +209,18 @@ export default function Billing() {
                 ) : (
                   <button
                     onClick={() => handleUpgrade(plan.id)}
-                    disabled={stripeCheckout.isPending || razorpayCheckout.isPending || easebuzzCheckout.isPending}
+                    disabled={dodoCheckout.isPending}
                     className={`w-full py-2 rounded-xl text-sm font-medium transition ${
                       plan.popular
                         ? "bg-indigo-500 hover:bg-indigo-600 text-white"
                         : "bg-white/5 hover:bg-white/10 text-white border border-white/10"
                     }`}
                   >
-                    {plan.priceUSD === 0 ? "Downgrade" : "Upgrade"}
+                    {dodoCheckout.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                    ) : (
+                      plan.price === 0 ? "Downgrade" : "Upgrade"
+                    )}
                   </button>
                 )}
               </div>

@@ -28,6 +28,12 @@ class SubscriptionResponse(BaseModel):
         from_attributes = True
 
 
+class DodoCheckoutRequest(BaseModel):
+    workspace_id: UUID
+    plan: str  # starter, pro, business
+    interval: str  # monthly, yearly
+
+
 class EasebuzzCheckoutRequest(BaseModel):
     workspace_id: UUID
     plan: str  # starter, pro, business
