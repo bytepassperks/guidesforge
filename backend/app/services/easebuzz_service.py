@@ -72,11 +72,12 @@ def initiate_payment(
     amount = plan_config["amount"]
     productinfo = f"GuidesForge {plan_config['name']}"
 
-    # Build hash string: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||salt
+    # Build hash string per official Easebuzz SDK:
+    # key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt
     # udf1 = workspace_id, udf2 = plan, udf3 = interval, udf4 = currency
     hash_string = (
         f"{key}|{txnid}|{amount}|{productinfo}|{customer_name}|{customer_email}"
-        f"|{workspace_id}|{plan}|{interval}|{currency.lower()}||||||{salt}"
+        f"|{workspace_id}|{plan}|{interval}|{currency.lower()}|||||||{salt}"
     )
     hash_value = _generate_hash(hash_string)
 
@@ -102,8 +103,9 @@ def initiate_payment(
     if currency.upper() != "INR":
         payload["currency"] = currency.upper()
 
+    # Use /payment/initiateLink endpoint (per official Easebuzz SDK)
     response = requests.post(
-        f"{EASEBUZZ_API_URL}/payment/v1/js/head",
+        f"{EASEBUZZ_API_URL}/payment/initiateLink",
         data=payload,
         timeout=30,
     )
@@ -111,28 +113,19 @@ def initiate_payment(
     if response.status_code != 200:
         raise ValueError(f"Easebuzz API error: HTTP {response.status_code}")
 
-    # Try to parse JSON response (seamless integration returns JSON with access_key)
-    try:
-        result = response.json()
-        if result.get("status") == 1 and result.get("data"):
-            return {
-                "access_key": result["data"],
-                "txnid": txnid,
-                "key": key,
-                "environment": "production" if "pay.easebuzz.in" in EASEBUZZ_API_URL else "test",
-            }
-        elif result.get("status") == 0:
-            raise ValueError(f"Easebuzz error: {result.get('data', 'Unknown error')}")
-    except (ValueError, KeyError):
-        pass
-
-    # Fallback: redirect-based checkout
-    return {
-        "payment_url": f"{EASEBUZZ_API_URL}/pay/{txnid}",
-        "txnid": txnid,
-        "key": key,
-        "environment": "production" if "pay.easebuzz.in" in EASEBUZZ_API_URL else "test",
-    }
+    result = response.json()
+    if result.get("status") == 1 and result.get("data"):
+        access_key = result["data"]
+        return {
+            "access_key": access_key,
+            "payment_url": f"{EASEBUZZ_API_URL}/pay/{access_key}",
+            "txnid": txnid,
+            "key": key,
+            "environment": "production" if "pay.easebuzz.in" in EASEBUZZ_API_URL else "test",
+        }
+    else:
+        error_msg = result.get("data", "Unknown error")
+        raise ValueError(f"Easebuzz error: {error_msg}")
 
 
 def verify_payment(response_data: dict) -> dict:
@@ -147,8 +140,8 @@ def verify_payment(response_data: dict) -> dict:
     if not salt:
         raise ValueError("Easebuzz salt not configured")
 
-    # Response hash format (reverse of request):
-    # salt|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
+    # Response reverse hash format (per official Easebuzz SDK):
+    # salt|status|udf10|udf9|udf8|udf7|udf6|udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
     status = response_data.get("status", "")
     txnid = response_data.get("txnid", "")
     amount = response_data.get("amount", "")
@@ -161,9 +154,12 @@ def verify_payment(response_data: dict) -> dict:
     key = response_data.get("key", "")
     received_hash = response_data.get("hash", "")
 
-    # Reverse hash: salt|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
+    # Reverse hash: salt|status|udf10|udf9|udf8|udf7|udf6|udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
     hash_string = (
-        f"{salt}|{status}||||||{response_data.get('udf5', '')}"
+        f"{salt}|{status}"
+        f"|{response_data.get('udf10', '')}|{response_data.get('udf9', '')}"
+        f"|{response_data.get('udf8', '')}|{response_data.get('udf7', '')}"
+        f"|{response_data.get('udf6', '')}|{response_data.get('udf5', '')}"
         f"|{response_data.get('udf4', '')}|{udf3}|{udf2}|{udf1}"
         f"|{email}|{firstname}|{productinfo}|{amount}|{txnid}|{key}"
     )
