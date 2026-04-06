@@ -7,7 +7,9 @@ Deploys on Modal.com for GPU-accelerated AI processing:
 3. Text-to-Speech (Kokoro TTS)
 4. Video assembly (FFmpeg)
 5. Voice cloning (Chatterbox)
-6. OmniParser callout annotation
+6. Staleness check (Playwright + pixelmatch with diff image)
+7. Transcribe audio (Whisper large-v3)
+8. Detect UI elements (OmniParser V2 / GPT-4o-mini vision)
 """
 
 import modal
@@ -46,6 +48,22 @@ tts_image = base_image.pip_install(
 # Vision image with transformers
 vision_image = base_image.pip_install(
     "openai==1.50.0",
+)
+
+# Whisper image for audio transcription
+whisper_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "torch==2.6.0",
+        "torchaudio==2.6.0",
+        "transformers==4.46.0",
+        "accelerate==1.0.0",
+        "requests==2.32.3",
+        "boto3==1.35.0",
+        "numpy==1.26.4",
+        "openai-whisper==20240930",
+    )
+    .apt_install("ffmpeg", "libsndfile1")
 )
 
 # S3 configuration
@@ -476,7 +494,7 @@ def check_staleness(
     guide_id: str = "",
     step_number: int = 0,
 ) -> dict:
-    """Compare live screenshot against baseline using pixelmatch."""
+    """Compare live screenshot against baseline using pixelmatch. Generates red-overlay diff image."""
     from PIL import Image
     import numpy as np
     from playwright.sync_api import sync_playwright
@@ -510,12 +528,34 @@ def check_staleness(
     staleness_score = min(mean_diff / 50.0, 1.0)
     is_stale = staleness_score > 0.15  # 15% threshold
 
+    # Generate red-overlay diff image
+    threshold = 30  # pixel diff threshold for marking as changed
+    diff_magnitude = np.max(diff, axis=2)  # max channel diff per pixel
+    changed_mask = diff_magnitude > threshold
+
+    # Blend: 60% red overlay + 40% original for changed areas
+    blend_arr = baseline_arr.copy().astype(float)
+    red_overlay = np.zeros_like(blend_arr)
+    red_overlay[changed_mask] = [255, 0, 0]
+    blend_arr[changed_mask] = (
+        blend_arr[changed_mask] * 0.4 + red_overlay[changed_mask] * 0.6
+    )
+
+    diff_pil = Image.fromarray(blend_arr.astype(np.uint8))
+    diff_path = tempfile.mktemp(suffix=".png")
+    diff_pil.save(diff_path)
+
     # Upload live screenshot
     s3_key = f"guides/{guide_id}/staleness/step_{step_number}_live.png"
     live_url = upload_to_s3(live_path, s3_key)
 
+    # Upload diff image
+    diff_s3_key = f"guides/{guide_id}/staleness/step_{step_number}_diff.png"
+    diff_url = upload_to_s3(diff_path, diff_s3_key)
+
     os.unlink(live_path)
     os.unlink(baseline_path)
+    os.unlink(diff_path)
 
     return {
         "is_stale": is_stale,
@@ -523,6 +563,232 @@ def check_staleness(
         "mean_pixel_diff": float(mean_diff),
         "max_pixel_diff": float(max_pixel_diff),
         "live_screenshot_url": live_url,
+        "diff_image_url": diff_url,
+        "guide_id": guide_id,
+        "step_number": step_number,
+    }
+
+
+# ─── 7. Transcribe Audio (Whisper large-v3) ─────────────────────────────────
+
+@app.function(
+    image=whisper_image,
+    gpu="A10G",
+    secrets=[modal.Secret.from_name("guidesforge-secrets")],
+    timeout=300,
+)
+def transcribe_audio(
+    audio_url: str,
+    language: str = "en",
+    guide_id: str = "",
+) -> dict:
+    """Transcribe audio using Whisper large-v3. Returns transcription text and segments."""
+    import whisper
+
+    # Download audio file
+    audio_path = tempfile.mktemp(suffix=".wav")
+    download_from_url(audio_url, audio_path)
+
+    # Load Whisper model
+    model = whisper.load_model("large-v3", device="cuda")
+
+    # Transcribe
+    result = model.transcribe(
+        audio_path,
+        language=language if language != "auto" else None,
+        task="transcribe",
+        verbose=False,
+    )
+
+    os.unlink(audio_path)
+
+    # Extract segments with timestamps
+    segments = []
+    for seg in result.get("segments", []):
+        segments.append({
+            "start": round(seg["start"], 2),
+            "end": round(seg["end"], 2),
+            "text": seg["text"].strip(),
+        })
+
+    # Upload transcript as JSON to S3
+    transcript_data = {
+        "text": result["text"].strip(),
+        "language": result.get("language", language),
+        "segments": segments,
+    }
+    transcript_path = tempfile.mktemp(suffix=".json")
+    with open(transcript_path, "w") as f:
+        json.dump(transcript_data, f)
+
+    s3_key = f"guides/{guide_id}/transcripts/transcript.json"
+    transcript_url = upload_to_s3(transcript_path, s3_key)
+    os.unlink(transcript_path)
+
+    return {
+        "text": result["text"].strip(),
+        "language": result.get("language", language),
+        "segments": segments,
+        "transcript_url": transcript_url,
+        "guide_id": guide_id,
+    }
+
+
+# ─── 8. Detect UI Elements (OmniParser V2 via GPT-4o-mini Vision) ───────────
+
+@app.function(
+    image=vision_image,
+    secrets=[modal.Secret.from_name("guidesforge-secrets")],
+    timeout=120,
+)
+def detect_ui_elements(
+    screenshot_url: str,
+    click_x: int = 0,
+    click_y: int = 0,
+    guide_id: str = "",
+    step_number: int = 0,
+) -> dict:
+    """Detect UI elements in a screenshot and generate annotated callout image.
+    Uses GPT-4o-mini vision for element detection, then draws annotation overlays
+    (red bounding box, arrow, label) on the screenshot using Pillow.
+    Returns detected elements JSON and annotated screenshot URL.
+    """
+    from openai import OpenAI
+    from PIL import Image, ImageDraw
+    import requests as req
+    import io
+
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+
+    # Detect UI elements via GPT-4o-mini vision
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": """Analyze this screenshot and identify ALL interactive UI elements visible.
+For each element, provide:
+- type: "button", "input", "link", "menu", "dropdown", "checkbox", "toggle", "tab", "icon"
+- label: the visible text or aria label
+- bbox: [x1, y1, x2, y2] as percentage coordinates (0-100) of image dimensions
+- is_target: true if this appears to be the main element the user would interact with
+
+Focus on the most prominent interactive element. Return JSON:
+{"elements": [{"type": "...", "label": "...", "bbox": [x1, y1, x2, y2], "is_target": true/false}]}""",
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": screenshot_url, "detail": "high"},
+                },
+            ],
+        }],
+        response_format={"type": "json_object"},
+        max_tokens=800,
+    )
+
+    elements = json.loads(response.choices[0].message.content)
+
+    # Download original screenshot
+    img_resp = req.get(screenshot_url)
+    img = Image.open(io.BytesIO(img_resp.content)).convert("RGB")
+    draw = ImageDraw.Draw(img)
+    w, h = img.size
+
+    # Draw annotations on screenshot
+    for elem in elements.get("elements", []):
+        bbox = elem.get("bbox", [])
+        if len(bbox) != 4:
+            continue
+
+        # Convert percentage to pixels
+        x1 = int(bbox[0] * w / 100)
+        y1 = int(bbox[1] * h / 100)
+        x2 = int(bbox[2] * w / 100)
+        y2 = int(bbox[3] * h / 100)
+
+        if elem.get("is_target"):
+            # Target element: thick red rectangle + arrow + label
+            for offset in range(4):
+                draw.rectangle(
+                    [x1 - offset, y1 - offset, x2 + offset, y2 + offset],
+                    outline="#EF4444",
+                )
+
+            # Draw arrow pointing down to the element
+            center_x = (x1 + x2) // 2
+            arrow_tip_y = max(0, y1 - 8)
+            arrow_start_y = max(0, y1 - 50)
+            draw.line(
+                [(center_x, arrow_start_y), (center_x, arrow_tip_y)],
+                fill="#EF4444", width=3,
+            )
+            draw.polygon(
+                [
+                    (center_x, arrow_tip_y),
+                    (center_x - 8, arrow_tip_y - 12),
+                    (center_x + 8, arrow_tip_y - 12),
+                ],
+                fill="#EF4444",
+            )
+
+            # Label text above arrow
+            label = elem.get("label", "")
+            if label:
+                label_text = label[:40]
+                label_y = max(0, arrow_start_y - 28)
+                text_bbox = draw.textbbox((0, 0), label_text)
+                text_w = text_bbox[2] - text_bbox[0]
+                pill_x1 = center_x - text_w // 2 - 8
+                pill_x2 = center_x + text_w // 2 + 8
+                draw.rounded_rectangle(
+                    [pill_x1, label_y, pill_x2, label_y + 24],
+                    radius=6,
+                    fill="#EF4444",
+                )
+                draw.text(
+                    (center_x - text_w // 2, label_y + 4),
+                    label_text,
+                    fill="white",
+                )
+        else:
+            # Non-target: subtle outline
+            draw.rectangle(
+                [x1, y1, x2, y2],
+                outline="#94A3B8",
+                width=1,
+            )
+
+    # If click coordinates provided, draw a click indicator circle
+    if click_x > 0 and click_y > 0:
+        for r in [20, 15, 10]:
+            draw.ellipse(
+                [click_x - r, click_y - r, click_x + r, click_y + r],
+                outline="#F97316",
+                width=2,
+            )
+        draw.ellipse(
+            [click_x - 5, click_y - 5, click_x + 5, click_y + 5],
+            fill="#F97316",
+        )
+
+    # Save annotated screenshot
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    annotated_path = tempfile.mktemp(suffix=".png")
+    with open(annotated_path, "wb") as f:
+        f.write(buffer.getvalue())
+
+    s3_key = f"guides/{guide_id}/annotated/step_{step_number}.png"
+    annotated_url = upload_to_s3(annotated_path, s3_key)
+    os.unlink(annotated_path)
+
+    return {
+        "elements": elements.get("elements", []),
+        "annotated_screenshot_url": annotated_url,
         "guide_id": guide_id,
         "step_number": step_number,
     }

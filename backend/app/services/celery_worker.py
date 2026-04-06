@@ -1,5 +1,6 @@
 """Celery worker for async guide processing tasks."""
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import settings
 
@@ -21,6 +22,17 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=50,
 )
+
+celery_app.conf.beat_schedule = {
+    "check-all-staleness-nightly": {
+        "task": "check_all_staleness",
+        "schedule": crontab(hour=20, minute=30),  # 8:30 PM UTC = 2 AM IST
+    },
+    "expire-trials-nightly": {
+        "task": "expire_trials",
+        "schedule": crontab(hour=0, minute=0),  # Midnight UTC
+    },
+}
 
 
 @celery_app.task(bind=True, name="process_guide")
@@ -96,6 +108,71 @@ def check_all_staleness_task(self):
                 results.append({"guide_id": str(guide.id), "error": str(e)})
 
         return {"checked": len(results), "results": results}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="expire_trials")
+def expire_trials_task(self):
+    """Nightly cron: downgrade expired Pro trial users to the free plan."""
+    from datetime import datetime
+
+    from app.models.database import SessionLocal, Subscription, User
+
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        expired_users = db.query(User).filter(
+            User.trial_ends_at.isnot(None),
+            User.trial_ends_at < now,
+            User.plan != "free",
+        ).all()
+
+        downgraded = 0
+        for user in expired_users:
+            # Check if user has an active paid subscription
+            active_sub = db.query(Subscription).filter(
+                Subscription.workspace_id.in_(
+                    db.query(User.id).filter(User.id == user.id)
+                ),
+                Subscription.status == "active",
+            ).first()
+
+            if not active_sub:
+                user.plan = "free"
+                user.trial_ends_at = None
+                downgraded += 1
+
+                # Send notification email
+                try:
+                    from app.services.email_service import send_email_mailgun
+                    send_email_mailgun(
+                        to=user.email,
+                        subject="[GuidesForge] Your Pro trial has ended",
+                        html=f"""
+                        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #0C0D14; color: #FFFFFF; padding: 40px; border-radius: 16px;">
+                            <h1 style="color: #6366F1;">GuidesForge</h1>
+                            <h2>Your Pro trial has ended</h2>
+                            <p style="color: #94A3B8;">Hi {user.full_name or 'there'},</p>
+                            <p style="color: #94A3B8;">Your 14-day Pro trial has expired. You've been moved to the Free plan (10 guides/month).</p>
+                            <p style="color: #94A3B8;">Upgrade anytime to keep all Pro features.</p>
+                            <div style="text-align: center; margin-top: 32px;">
+                                <a href="https://guidesforge.org/billing"
+                                   style="background: #6366F1; color: white; padding: 12px 32px; border-radius: 9999px; text-decoration: none; font-weight: 600;">
+                                    Upgrade Now
+                                </a>
+                            </div>
+                        </div>
+                        """,
+                    )
+                except Exception as e:
+                    print(f"[TRIAL] Error sending trial expiry email to {user.email}: {e}")
+
+        db.commit()
+        return {"expired_users_checked": len(expired_users), "downgraded": downgraded}
+    except Exception as e:
+        print(f"[TRIAL] Error in expire_trials_task: {e}")
+        raise
     finally:
         db.close()
 

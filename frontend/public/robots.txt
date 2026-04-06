@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /billing
+Disallow: /guides/*/edit
+Disallow: /api/
+
+Sitemap: https://guidesforge.org/sitemap.xml

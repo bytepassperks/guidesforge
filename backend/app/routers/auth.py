@@ -80,6 +80,13 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
     except Exception:
         pass
 
+    # Track in Customer.io (non-blocking)
+    try:
+        from app.services.customerio_service import on_user_registered
+        on_user_registered(str(user.id), user.email, user.full_name)
+    except Exception:
+        pass
+
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 

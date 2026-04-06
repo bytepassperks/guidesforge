@@ -23,6 +23,7 @@ import {
   Check,
   X,
 } from "lucide-react"
+import CollaborativeEditor from "@/components/editor/CollaborativeEditor"
 
 interface GuideStep {
   id: string
@@ -325,11 +326,10 @@ export default function GuideEditor() {
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-400 mb-1">Narration Script</label>
-                          <textarea
-                            value={editNarration}
-                            onChange={(e) => setEditNarration(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none transition resize-none"
-                            rows={3}
+                          <CollaborativeEditor
+                            content={editNarration}
+                            onChange={(html) => setEditNarration(html)}
+                            placeholder="Write narration script for this step..."
                           />
                         </div>
                         <div className="flex gap-2">
