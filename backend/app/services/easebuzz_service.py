@@ -73,10 +73,10 @@ def initiate_payment(
     productinfo = f"GuidesForge {plan_config['name']}"
 
     # Build hash string: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||salt
-    # udf1 = workspace_id, udf2 = plan, udf3 = interval for webhook identification
+    # udf1 = workspace_id, udf2 = plan, udf3 = interval, udf4 = currency
     hash_string = (
         f"{key}|{txnid}|{amount}|{productinfo}|{customer_name}|{customer_email}"
-        f"|{workspace_id}|{plan}|{interval}|||||||{salt}"
+        f"|{workspace_id}|{plan}|{interval}|{currency.lower()}||||||{salt}"
     )
     hash_value = _generate_hash(hash_string)
 
@@ -95,6 +95,7 @@ def initiate_payment(
         "udf1": workspace_id,
         "udf2": plan,
         "udf3": interval,
+        "udf4": currency.lower(),
     }
 
     # Add currency for international payments
@@ -179,6 +180,7 @@ def verify_payment(response_data: dict) -> dict:
         "workspace_id": udf1,
         "plan": udf2,
         "interval": udf3,
+        "currency": response_data.get("udf4", "inr"),
         "email": email,
         "easebuzz_id": response_data.get("easepayid", ""),
         "payment_mode": response_data.get("mode", ""),

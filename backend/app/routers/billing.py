@@ -295,14 +295,7 @@ async def easebuzz_callback(request: Request, db: Session = Depends(get_db)):
                 Subscription.workspace_id == workspace_id
             ).first()
 
-            currency = "inr"
-            # Detect currency from amount - USD amounts are much smaller
-            try:
-                amt = float(payment["amount"])
-                if amt < 200:
-                    currency = "usd"
-            except (ValueError, TypeError):
-                pass
+            currency = payment.get("currency", "inr")
 
             if sub:
                 sub.plan = plan
