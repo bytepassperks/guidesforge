@@ -1,0 +1,32 @@
+# GuidesForge - AI-Powered Guide Creation Platform
+# https://guidesforge.org
+
+## About
+GuidesForge is an AI-powered platform that transforms screen recordings into four simultaneous outputs: narrated MP4 videos, step-by-step screenshot documentation, in-app interactive tours (Driver.js), and auto-published help center pages.
+
+## Key Features
+- Chrome extension for passive click recording (rrweb + screenshot capture)
+- AI narration via GPT-4o-mini + Kokoro TTS
+- Voice cloning via Chatterbox (23 languages)
+- Staleness detection via nightly Playwright screenshot comparison
+- Semantic search help widget (pgvector embeddings)
+- Collaborative editing with Tiptap
+- SDK for in-app tours and help widgets
+
+## Pricing
+- Free: $0/forever (10 guides/month)
+- Starter: $15/month (100 guides/month)
+- Pro: $39/month (unlimited guides, voice cloning, 5 seats)
+- Business: $99/month (white-label, 10 seats, custom domain, SSO)
+- Enterprise: Custom pricing
+
+## Contact
+- Website: https://guidesforge.org
+- Support: support@guidesforge.org
+
+## API
+- Base URL: https://guidesforge.org/api
+- Documentation: https://guidesforge.org/api/docs
+
+## Legal
+This content is provided for informational purposes. Please visit guidesforge.org for the most up-to-date information.

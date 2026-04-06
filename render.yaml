@@ -1,0 +1,156 @@
+# GuidesForge Render Blueprint
+# Defines all services for deployment
+
+services:
+  # ─── Backend API ─────────────────────────────────────────────────────────────
+  - type: web
+    name: guidesforge-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: guidesforge-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "https://guidesforge.org,https://www.guidesforge.org,https://guidesforge-web.onrender.com"
+      - key: S3_ENDPOINT
+        value: "https://s3.us-west-1.idrivee2.com"
+      - key: S3_BUCKET
+        value: "crop-spray-uploads"
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        value: "guidesforge.org"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MODAL_TOKEN_ID
+        sync: false
+      - key: MODAL_TOKEN_SECRET
+        sync: false
+      - key: CUSTOMERIO_SITE_ID
+        sync: false
+      - key: CUSTOMERIO_API_KEY
+        sync: false
+
+  # ─── Frontend ────────────────────────────────────────────────────────────────
+  - type: web
+    name: guidesforge-web
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: "https://guidesforge-api.onrender.com"
+      - key: VITE_HOCUSPOCUS_URL
+        value: "wss://guidesforge-hocuspocus.onrender.com"
+
+  # ─── Hocuspocus WebSocket Server (Collaborative Editing) ───────────────────
+  - type: web
+    name: guidesforge-hocuspocus
+    runtime: docker
+    dockerfilePath: ./hocuspocus/Dockerfile
+    dockerContext: ./hocuspocus
+    region: oregon
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: guidesforge-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: "https://guidesforge.org,https://www.guidesforge.org,https://guidesforge-web.onrender.com"
+      - key: PORT
+        value: "4000"
+
+  # ─── Celery Worker ──────────────────────────────────────────────────────────
+  - type: worker
+    name: guidesforge-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: guidesforge-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: S3_ENDPOINT
+        value: "https://s3.us-west-1.idrivee2.com"
+      - key: S3_BUCKET
+        value: "crop-spray-uploads"
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MODAL_TOKEN_ID
+        sync: false
+      - key: MODAL_TOKEN_SECRET
+        sync: false
+      - key: CUSTOMERIO_SITE_ID
+        sync: false
+      - key: CUSTOMERIO_API_KEY
+        sync: false
+    dockerCommand: celery -A app.services.celery_worker worker --loglevel=info --concurrency=2
+
+  # ─── Celery Beat (Cron) ─────────────────────────────────────────────────────
+  - type: worker
+    name: guidesforge-beat
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: guidesforge-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+    dockerCommand: celery -A app.services.celery_worker beat --loglevel=info
+
+databases:
+  - name: guidesforge-db
+    plan: free
+    region: oregon
+    postgresMajorVersion: 16
+    ipAllowList: []

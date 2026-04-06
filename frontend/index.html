@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="GuidesForge - AI-powered guide creation platform. Record once, publish four ways: narrated video, step-by-step docs, interactive tours, and help center pages." />
+    <title>GuidesForge - AI Guide Creation Platform</title>
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://guidesforge.org/" />
+    <meta property="og:title" content="GuidesForge - Record Once, Publish Four Ways" />
+    <meta property="og:description" content="AI-powered guide creation. Turn screen recordings into narrated videos, step-by-step docs, interactive tours, and help center pages automatically." />
+    <meta property="og:image" content="https://guidesforge.org/og-image.png" />
+    <meta property="og:site_name" content="GuidesForge" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="GuidesForge - Record Once, Publish Four Ways" />
+    <meta name="twitter:description" content="AI-powered guide creation. Turn screen recordings into narrated videos, step-by-step docs, interactive tours, and help center pages." />
+    <meta name="twitter:image" content="https://guidesforge.org/og-image.png" />
+
+    <!-- Fonts: Inter + Cabinet Grotesk + Satoshi -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "GuidesForge",
+      "url": "https://guidesforge.org",
+      "logo": "https://guidesforge.org/logo.png",
+      "description": "AI-powered guide creation platform. Record once, publish four ways.",
+      "email": "support@guidesforge.org",
+      "sameAs": []
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "GuidesForge",
+      "operatingSystem": "Web",
+      "applicationCategory": "BusinessApplication",
+      "description": "AI-powered guide creation platform that transforms screen recordings into narrated videos, step-by-step documentation, interactive tours, and help center pages.",
+      "offers": [
+        {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "name": "Free"
+        },
+        {
+          "@type": "Offer",
+          "price": "15",
+          "priceCurrency": "USD",
+          "name": "Starter",
+          "billingIncrement": "P1M"
+        },
+        {
+          "@type": "Offer",
+          "price": "39",
+          "priceCurrency": "USD",
+          "name": "Pro",
+          "billingIncrement": "P1M"
+        },
+        {
+          "@type": "Offer",
+          "price": "99",
+          "priceCurrency": "USD",
+          "name": "Business",
+          "billingIncrement": "P1M"
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is GuidesForge?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "GuidesForge is an AI-powered platform that transforms screen recordings into four simultaneous outputs: narrated MP4 videos, step-by-step screenshot documentation, in-app interactive tours, and auto-published help center pages."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does the Chrome extension work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Install our Chrome extension, then just use your app normally. Every click, navigation, and form fill is captured automatically using rrweb. Screenshots are taken at each step and sent to our AI pipeline."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What AI models does GuidesForge use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "GuidesForge uses GPT-4o-mini for screenshot description and UI element detection, Kokoro TTS for text-to-speech narration, Chatterbox for voice cloning across 23 languages, and Whisper for audio transcription."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there a free plan?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! Our Free plan includes 10 guides per month with video and doc output. All new accounts start with a 14-day Pro trial, no credit card required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is staleness detection?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "GuidesForge runs nightly Playwright checks comparing live screenshots of your app against the guide's baseline screenshots. If the UI has changed significantly, you're alerted so you can update your documentation."
+          }
+        }
+      ]
+    }
+    </script>
+  </head>
+  <body class="dark">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
