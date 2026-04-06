@@ -27,9 +27,9 @@ interface Guide {
   status: string
   video_url: string | null
   thumbnail_url: string | null
-  steps_count: number
-  total_views: number
-  staleness_status: string
+  total_steps: number
+  view_count: number
+  staleness_score: number
   created_at: string
   updated_at: string
 }
@@ -67,7 +67,7 @@ export default function Dashboard() {
     enabled: !!workspace,
   })
 
-  const guides: Guide[] = guidesData?.data?.items || []
+  const guides: Guide[] = guidesData?.data?.guides || []
 
   const createGuide = useMutation({
     mutationFn: () =>
@@ -188,7 +188,7 @@ export default function Dashboard() {
                         {guide.title}
                       </Link>
                       {getStatusBadge(guide.status)}
-                      {guide.staleness_status === "stale" && (
+                      {guide.staleness_score > 0.5 && (
                         <span className="flex items-center gap-1 text-orange-400 text-xs">
                           <AlertTriangle className="w-3 h-3" /> Stale
                         </span>
@@ -199,10 +199,10 @@ export default function Dashboard() {
                     )}
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
-                        <FileText className="w-3 h-3" /> {guide.steps_count} steps
+                        <FileText className="w-3 h-3" /> {guide.total_steps} steps
                       </span>
                       <span className="flex items-center gap-1">
-                        <Eye className="w-3 h-3" /> {guide.total_views} views
+                        <Eye className="w-3 h-3" /> {guide.view_count} views
                       </span>
                       {guide.video_url && (
                         <span className="flex items-center gap-1 text-indigo-400">

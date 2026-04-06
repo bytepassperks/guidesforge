@@ -29,17 +29,19 @@ interface OverviewData {
   total_guides: number
   total_views: number
   total_completions: number
-  avg_completion_rate: number
+  completion_rate: number
+  avg_watch_time: number
+  stale_guides: number
   daily_views: { date: string; views: number; completions: number }[]
   top_guides: { id: string; title: string; views: number; completion_rate: number }[]
 }
 
 interface StalenessReport {
-  total_guides: number
-  fresh_count: number
+  total_monitored: number
   stale_count: number
-  unknown_count: number
-  stale_guides: { id: string; title: string; last_checked: string; staleness_score: number }[]
+  healthy_count: number
+  stale_guides: { id: string; title: string; last_check: string; staleness_score: number }[]
+  healthy_guides: { id: string; title: string; last_check: string; staleness_score: number }[]
 }
 
 export default function Analytics() {
@@ -85,7 +87,7 @@ export default function Analytics() {
     {
       icon: <TrendingUp className="w-5 h-5 text-green-400" />,
       label: "Avg. Completion",
-      value: `${(overview?.avg_completion_rate ?? 0).toFixed(1)}%`,
+      value: `${(overview?.completion_rate ?? 0).toFixed(1)}%`,
     },
   ]
 
@@ -203,7 +205,7 @@ export default function Analytics() {
                   <>
                     <div className="grid grid-cols-3 gap-3 mb-4">
                       <div className="bg-green-500/5 border border-green-500/10 rounded-xl p-3 text-center">
-                        <p className="text-lg font-bold text-green-400">{staleness.fresh_count}</p>
+                        <p className="text-lg font-bold text-green-400">{staleness.healthy_count}</p>
                         <p className="text-xs text-gray-500">Fresh</p>
                       </div>
                       <div className="bg-orange-500/5 border border-orange-500/10 rounded-xl p-3 text-center">
@@ -211,7 +213,7 @@ export default function Analytics() {
                         <p className="text-xs text-gray-500">Stale</p>
                       </div>
                       <div className="bg-gray-500/5 border border-gray-500/10 rounded-xl p-3 text-center">
-                        <p className="text-lg font-bold text-gray-400">{staleness.unknown_count}</p>
+                        <p className="text-lg font-bold text-gray-400">{staleness.total_monitored - staleness.healthy_count - staleness.stale_count}</p>
                         <p className="text-xs text-gray-500">Unknown</p>
                       </div>
                     </div>
