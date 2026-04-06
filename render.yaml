@@ -17,10 +17,7 @@ services:
           name: guidesforge-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          name: guidesforge-redis
-          type: redis
-          property: connectionString
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
@@ -87,10 +84,7 @@ services:
           name: guidesforge-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          name: guidesforge-redis
-          type: redis
-          property: connectionString
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: S3_ENDPOINT
@@ -123,10 +117,7 @@ services:
           name: guidesforge-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          name: guidesforge-redis
-          type: redis
-          property: connectionString
+        sync: false
     dockerCommand: celery -A app.services.celery_worker beat --loglevel=info
 
 databases:
@@ -134,10 +125,4 @@ databases:
     plan: free
     region: oregon
     postgresMajorVersion: 16
-    ipAllowList: []
-
-keyValueStores:
-  - name: guidesforge-redis
-    plan: free
-    region: oregon
     ipAllowList: []
