@@ -124,6 +124,10 @@ export const billingAPI = {
     api.post("/api/billing/stripe/checkout", data),
   razorpaySubscription: (data: { workspace_id: string; plan: string; interval: string }) =>
     api.post("/api/billing/razorpay/create-subscription", data),
+  easebuzzCheckout: (data: { workspace_id: string; plan: string; interval: string; currency?: string }) =>
+    api.post("/api/billing/easebuzz/checkout", data),
+  easebuzzStatus: (txnid: string) =>
+    api.get(`/api/billing/easebuzz/status/${txnid}`),
   getSubscription: (workspaceId: string) =>
     api.get("/api/billing/subscription", { params: { workspace_id: workspaceId } }),
   cancel: (data: { workspace_id: string; reason?: string }) =>

@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "")
     RAZORPAY_KEY_SECRET: str = os.getenv("RAZORPAY_KEY_SECRET", "")
+    EASEBUZZ_KEY: str = os.getenv("EASEBUZZ_KEY", "")
+    EASEBUZZ_SALT: str = os.getenv("EASEBUZZ_SALT", "")
 
     # App
     SECRET_KEY: str = os.getenv("SECRET_KEY", "change-me-to-32-byte-random-string")

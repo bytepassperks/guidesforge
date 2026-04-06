@@ -101,6 +101,20 @@ export default function Billing() {
     },
   })
 
+  const easebuzzCheckout = useMutation({
+    mutationFn: ({ plan, cur }: { plan: string; cur: string }) =>
+      billingAPI.easebuzzCheckout({ workspace_id: workspace!.id, plan, interval, currency: cur }),
+    onSuccess: (res) => {
+      if (res.data.access_key) {
+        // Seamless Easebuzz checkout - open in new window
+        const env = res.data.environment === "production" ? "pay" : "testpay"
+        window.location.href = `https://${env}.easebuzz.in/pay/${res.data.access_key}`
+      } else if (res.data.payment_url) {
+        window.location.href = res.data.payment_url
+      }
+    },
+  })
+
   const cancelSub = useMutation({
     mutationFn: () =>
       billingAPI.cancel({ workspace_id: workspace!.id, reason: cancelReason }),
@@ -108,11 +122,8 @@ export default function Billing() {
   })
 
   function handleUpgrade(planId: string) {
-    if (currency === "inr") {
-      razorpayCheckout.mutate(planId)
-    } else {
-      stripeCheckout.mutate(planId)
-    }
+    // Use Easebuzz for both INR and international payments
+    easebuzzCheckout.mutate({ plan: planId, cur: currency.toUpperCase() })
   }
 
   const currentPlan = subscription?.plan || "free"
@@ -245,7 +256,7 @@ export default function Billing() {
                 ) : (
                   <button
                     onClick={() => handleUpgrade(plan.id)}
-                    disabled={stripeCheckout.isPending || razorpayCheckout.isPending}
+                    disabled={stripeCheckout.isPending || razorpayCheckout.isPending || easebuzzCheckout.isPending}
                     className={`w-full py-2 rounded-xl text-sm font-medium transition ${
                       plan.popular
                         ? "bg-indigo-500 hover:bg-indigo-600 text-white"

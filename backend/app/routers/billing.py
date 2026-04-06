@@ -9,6 +9,7 @@ from app.config import settings
 from app.models.database import Subscription, User, Workspace, WorkspaceMember, get_db
 from app.schemas.billing import (
     CancelSubscriptionRequest,
+    EasebuzzCheckoutRequest,
     RazorpayCheckoutRequest,
     StripeCheckoutRequest,
     SubscriptionResponse,
@@ -234,6 +235,121 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 
+@router.post("/easebuzz/checkout")
+def create_easebuzz_checkout(
+    data: EasebuzzCheckoutRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.easebuzz_service import initiate_payment
+
+    ws = db.query(Workspace).filter(Workspace.id == data.workspace_id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    member = db.query(WorkspaceMember).filter(
+        WorkspaceMember.workspace_id == ws.id,
+        WorkspaceMember.user_id == current_user.id,
+        WorkspaceMember.role.in_(["owner", "admin"]),
+    ).first()
+    if not member:
+        raise HTTPException(status_code=403, detail="Only owners/admins can manage billing")
+
+    try:
+        result = initiate_payment(
+            workspace_id=str(ws.id),
+            plan=data.plan,
+            interval=data.interval,
+            customer_email=current_user.email,
+            customer_name=current_user.full_name or "Customer",
+            currency=data.currency,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/easebuzz/callback")
+async def easebuzz_callback(request: Request, db: Session = Depends(get_db)):
+    """Handle Easebuzz payment success/failure callback.
+
+    Easebuzz POSTs to surl (success) or furl (failure) with payment details.
+    """
+    form_data = await request.form()
+    response_data = dict(form_data)
+
+    from app.services.easebuzz_service import verify_payment
+
+    try:
+        payment = verify_payment(response_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if payment["status"] == "success":
+        workspace_id = payment["workspace_id"]
+        plan = payment["plan"]
+        interval = payment["interval"]
+
+        if workspace_id:
+            sub = db.query(Subscription).filter(
+                Subscription.workspace_id == workspace_id
+            ).first()
+
+            currency = "inr"
+            # Detect currency from amount - USD amounts are much smaller
+            try:
+                amt = float(payment["amount"])
+                if amt < 200:
+                    currency = "usd"
+            except (ValueError, TypeError):
+                pass
+
+            if sub:
+                sub.plan = plan
+                sub.provider = "easebuzz"
+                sub.provider_subscription_id = payment["easebuzz_id"]
+                sub.status = "active"
+                sub.interval = interval
+                sub.currency = currency
+            else:
+                sub = Subscription(
+                    workspace_id=uuid.UUID(workspace_id),
+                    plan=plan,
+                    currency=currency,
+                    interval=interval or "monthly",
+                    provider="easebuzz",
+                    provider_subscription_id=payment["easebuzz_id"],
+                    status="active",
+                )
+                db.add(sub)
+
+            ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+            if ws:
+                owner = db.query(User).filter(User.id == ws.owner_id).first()
+                if owner:
+                    owner.plan = plan
+                    owner.plan_currency = currency
+
+            db.commit()
+
+    return {"status": "ok", "payment_status": payment["status"], "txnid": payment["txnid"]}
+
+
+@router.get("/easebuzz/status/{txnid}")
+def get_easebuzz_status(
+    txnid: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Check Easebuzz transaction status."""
+    from app.services.easebuzz_service import transaction_status
+
+    try:
+        result = transaction_status(txnid)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/subscription", response_model=SubscriptionResponse)
 def get_subscription(
     workspace_id: uuid.UUID,
@@ -290,6 +406,10 @@ def cancel_subscription(
         elif sub.provider == "razorpay":
             from app.services.razorpay_service import cancel_subscription as rp_cancel
             rp_cancel(sub.provider_subscription_id)
+        elif sub.provider == "easebuzz":
+            # Easebuzz doesn't have subscription cancellation API
+            # Just mark as cancelled in our DB
+            pass
 
         sub.status = "cancelling"
         db.commit()
