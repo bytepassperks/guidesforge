@@ -2,7 +2,6 @@
 Uses the Customer.io Track API to identify users, track events,
 and trigger automated campaigns (welcome, staleness alerts, trial expiry).
 """
-import json
 from base64 import b64encode
 from typing import Optional
 
