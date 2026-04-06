@@ -420,9 +420,7 @@ def _assemble_video_local(guide, steps: List, db: Session):
 def _generate_embedding(guide, steps: List, db: Session):
     """Generate pgvector embedding for semantic search."""
     try:
-        from sentence_transformers import SentenceTransformer
-
-        model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        from app.services.embedding_service import get_embedding
 
         # Combine guide title + description + all step text
         text_parts = [guide.title or ""]
@@ -435,8 +433,9 @@ def _generate_embedding(guide, steps: List, db: Session):
                 text_parts.append(step.description)
 
         full_text = " ".join(text_parts)
-        embedding = model.encode(full_text).tolist()
-        guide.embedding = embedding
-        db.commit()
+        embedding = get_embedding(full_text)
+        if embedding:
+            guide.embedding = embedding
+            db.commit()
     except Exception as e:
         print(f"[PIPELINE] Embedding generation failed: {e}")

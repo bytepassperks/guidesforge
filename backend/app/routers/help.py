@@ -31,9 +31,10 @@ def get_help_center(
     if search:
         # Try semantic search first
         try:
-            from sentence_transformers import SentenceTransformer
-            model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-            query_embedding = model.encode(search).tolist()
+            from app.services.embedding_service import get_embedding
+            query_embedding = get_embedding(search)
+            if not query_embedding:
+                raise ValueError("Empty embedding")
             guides = db.query(Guide).filter(
                 Guide.workspace_id == workspace.id,
                 Guide.help_center_published.is_(True),
@@ -154,9 +155,10 @@ def search_help_center(
 
     # Semantic search
     try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        query_embedding = model.encode(q).tolist()
+        from app.services.embedding_service import get_embedding
+        query_embedding = get_embedding(q)
+        if not query_embedding:
+            raise ValueError("Empty embedding")
 
         guides = db.query(Guide).filter(
             Guide.workspace_id == workspace.id,

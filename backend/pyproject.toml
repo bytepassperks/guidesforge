@@ -31,7 +31,7 @@ pydantic-settings = "^2.6.0"
 python-dotenv = "^1.0.1"
 httpx = "^0.27.0"
 email-validator = "^2.2.0"
-sentence-transformers = "^3.3.0"
+# sentence-transformers removed - using OpenAI embeddings API instead (saves ~2GB Docker image size)
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

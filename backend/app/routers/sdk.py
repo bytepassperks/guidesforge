@@ -138,9 +138,10 @@ def sdk_search(data: SDKSearchRequest, db: Session = Depends(get_db)):
 
     # Try semantic search with pgvector
     try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        query_embedding = model.encode(data.query).tolist()
+        from app.services.embedding_service import get_embedding
+        query_embedding = get_embedding(data.query)
+        if not query_embedding:
+            raise ValueError("Empty embedding")
 
         # Cosine similarity search
         guides = db.query(Guide).filter(
