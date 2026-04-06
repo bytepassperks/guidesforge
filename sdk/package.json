@@ -1,0 +1,22 @@
+{
+  "name": "@guidesforge/sdk",
+  "version": "1.0.0",
+  "description": "GuidesForge SDK - In-app interactive tours, help widget, and semantic search",
+  "main": "dist/guidesforge-sdk.js",
+  "module": "dist/guidesforge-sdk.esm.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "dependencies": {
+    "driver.js": "^1.3.1"
+  },
+  "files": [
+    "dist/"
+  ],
+  "license": "MIT"
+}
