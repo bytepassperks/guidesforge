@@ -131,7 +131,7 @@ services:
 
 databases:
   - name: guidesforge-db
-    plan: starter
+    plan: basic_256mb
     region: oregon
     postgresMajorVersion: 16
     ipAllowList: []
