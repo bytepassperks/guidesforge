@@ -48,6 +48,10 @@ services:
         sync: false
       - key: MODAL_TOKEN_SECRET
         sync: false
+      - key: CUSTOMERIO_SITE_ID
+        sync: false
+      - key: CUSTOMERIO_API_KEY
+        sync: false
 
   # ─── Frontend ────────────────────────────────────────────────────────────────
   - type: web
@@ -100,6 +104,10 @@ services:
       - key: MODAL_TOKEN_ID
         sync: false
       - key: MODAL_TOKEN_SECRET
+        sync: false
+      - key: CUSTOMERIO_SITE_ID
+        sync: false
+      - key: CUSTOMERIO_API_KEY
         sync: false
     dockerCommand: celery -A app.services.celery_worker worker --loglevel=info --concurrency=2
 
