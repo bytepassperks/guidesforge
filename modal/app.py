@@ -24,8 +24,8 @@ app = modal.App("guidesforge")
 base_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
-        "torch==2.4.0",
-        "torchaudio==2.4.0",
+        "torch==2.6.0",
+        "torchaudio==2.6.0",
         "transformers==4.46.0",
         "accelerate==1.0.0",
         "Pillow==10.4.0",
@@ -398,13 +398,12 @@ def assemble_video(
 chatterbox_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
-        "torch==2.4.0",
-        "torchaudio==2.4.0",
-        "chatterbox-tts>=0.1.0",
+        "torch==2.6.0",
+        "torchaudio==2.6.0",
+        "chatterbox-tts==0.1.7",
         "soundfile==0.12.1",
         "requests==2.32.3",
         "boto3==1.35.0",
-        "numpy==1.26.4",
     )
     .apt_install("ffmpeg", "libsndfile1")
 )
