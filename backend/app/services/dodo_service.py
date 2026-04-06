@@ -61,7 +61,6 @@ def create_checkout_session(
             "email": customer_email,
             "name": customer_name,
         },
-        payment_link=True,
         return_url=return_url,
         metadata={
             "workspace_id": workspace_id,
@@ -70,17 +69,13 @@ def create_checkout_session(
         },
     )
 
-    checkout_url = getattr(session, "url", None) or getattr(session, "checkout_url", None)
-    session_id = getattr(session, "session_id", None) or getattr(session, "id", None)
-
-    if not checkout_url:
-        # Try to construct from session response
-        logger.warning("No checkout_url in response, session attrs: %s", dir(session))
+    if not session.checkout_url:
+        logger.warning("No checkout_url in response, session: %s", session.model_dump())
         raise ValueError("Failed to get checkout URL from DodoPayments")
 
     return {
-        "checkout_url": checkout_url,
-        "session_id": str(session_id) if session_id else None,
+        "checkout_url": session.checkout_url,
+        "session_id": session.session_id,
         "product_id": product_id,
         "plan": plan,
         "interval": interval,
