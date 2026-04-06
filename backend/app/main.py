@@ -1,18 +1,19 @@
 """GuidesForge API - Main FastAPI application."""
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.routers import analytics, auth, billing, guides, help, pipeline, sdk, steps, workspace
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     # Startup: create tables if needed
-    from app.models.database import engine, Base
+    from app.models.database import Base, engine
     Base.metadata.create_all(bind=engine)
     print("[STARTUP] Database tables created/verified")
     yield
@@ -57,8 +58,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Register routers
-from app.routers import auth, guides, steps, workspace, billing, analytics, sdk, help, pipeline
-
 app.include_router(auth.router)
 app.include_router(guides.router)
 app.include_router(steps.router)

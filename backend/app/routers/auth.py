@@ -1,23 +1,29 @@
 """Authentication routes - register, login, JWT tokens, profile."""
 import secrets
-import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.models.database import get_db, User, Workspace, WorkspaceMember
+from app.models.database import User, Workspace, WorkspaceMember, get_db
 from app.schemas.auth import (
-    UserRegister, UserLogin, TokenResponse, TokenRefresh,
-    UserResponse, UserUpdate,
+    TokenRefresh,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+    UserUpdate,
 )
+from app.services.email_service import send_welcome_email
 from app.utils.auth import (
-    hash_password, verify_password, create_access_token,
-    create_refresh_token, decode_token, get_current_user,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    get_current_user,
+    hash_password,
+    verify_password,
 )
 from app.utils.s3 import upload_voice_profile
-from app.services.email_service import send_welcome_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

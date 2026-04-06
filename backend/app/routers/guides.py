@@ -3,17 +3,21 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
-from app.models.database import get_db, Guide, GuideStep, GuideAnalytics, User, Workspace, WorkspaceMember
+from app.models.database import Guide, GuideAnalytics, GuideStep, User, Workspace, WorkspaceMember, get_db
 from app.schemas.guides import (
-    GuideCreate, GuideUpdate, GuideResponse, GuideListResponse,
-    GuideStepResponse, EmbedCodeResponse, TrackViewRequest,
+    EmbedCodeResponse,
+    GuideCreate,
+    GuideListResponse,
+    GuideResponse,
+    GuideStepResponse,
+    GuideUpdate,
+    TrackViewRequest,
 )
-from app.utils.auth import get_current_user
 from app.services.plan_limits import check_guide_limit, get_plan_limits
+from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/guides", tags=["guides"])
 

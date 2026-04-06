@@ -1,5 +1,4 @@
 """Celery worker for async guide processing tasks."""
-import os
 from celery import Celery
 
 from app.config import settings
@@ -46,6 +45,7 @@ def process_guide_task(self, guide_id: str, steps_data: list):
 def check_staleness_task(self, guide_id: str):
     """Run staleness detection for a single guide."""
     import asyncio
+
     from app.models.database import SessionLocal
     from app.services.staleness_service import run_staleness_check_for_guide
 
@@ -65,14 +65,15 @@ def check_staleness_task(self, guide_id: str):
 def check_all_staleness_task(self):
     """Nightly cron: check staleness for all enabled guides."""
     import asyncio
-    from app.models.database import SessionLocal, Guide
-    from app.services.staleness_service import run_staleness_check_for_guide
+
+    from app.models.database import Guide, SessionLocal
     from app.services.email_service import send_staleness_notification
+    from app.services.staleness_service import run_staleness_check_for_guide
 
     db = SessionLocal()
     try:
         guides = db.query(Guide).filter(
-            Guide.staleness_detection_enabled == True,
+            Guide.staleness_detection_enabled.is_(True),
             Guide.status.in_(["ready", "stale"]),
         ).all()
 
@@ -102,7 +103,7 @@ def check_all_staleness_task(self):
 @celery_app.task(bind=True, name="regenerate_step_audio")
 def regenerate_step_audio_task(self, guide_id: str, step_id: str):
     """Regenerate TTS audio for a single step."""
-    from app.models.database import SessionLocal, Guide, GuideStep
+    from app.models.database import GuideStep, SessionLocal
     from app.utils.s3 import upload_audio
 
     db = SessionLocal()
@@ -110,8 +111,6 @@ def regenerate_step_audio_task(self, guide_id: str, step_id: str):
         step = db.query(GuideStep).filter(GuideStep.id == step_id).first()
         if not step or not step.script_text:
             return {"error": "Step not found or no script text"}
-
-        guide = db.query(Guide).filter(Guide.id == guide_id).first()
 
         try:
             import modal
@@ -132,8 +131,10 @@ def regenerate_step_callouts_task(self, guide_id: str, step_id: str):
     """Regenerate annotated screenshot for a single step."""
     import io
     import json
+
     from PIL import Image, ImageDraw
-    from app.models.database import SessionLocal, GuideStep
+
+    from app.models.database import GuideStep, SessionLocal
     from app.utils.s3 import upload_annotated_screenshot
 
     db = SessionLocal()

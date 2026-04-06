@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.models.database import get_db, Workspace, Guide, GuideStep, GuideAnalytics
+from app.models.database import Guide, GuideStep, Workspace, get_db
 
 router = APIRouter(prefix="/api/help", tags=["help-center"])
 
@@ -24,8 +24,8 @@ def get_help_center(
 
     query = db.query(Guide).filter(
         Guide.workspace_id == workspace.id,
-        Guide.help_center_published == True,
-        Guide.is_public == True,
+        Guide.help_center_published.is_(True),
+        Guide.is_public.is_(True),
     )
 
     if search:
@@ -36,8 +36,8 @@ def get_help_center(
             query_embedding = model.encode(search).tolist()
             guides = db.query(Guide).filter(
                 Guide.workspace_id == workspace.id,
-                Guide.help_center_published == True,
-                Guide.is_public == True,
+                Guide.help_center_published.is_(True),
+                Guide.is_public.is_(True),
                 Guide.embedding.isnot(None),
             ).order_by(
                 Guide.embedding.cosine_distance(query_embedding)
@@ -94,8 +94,8 @@ def get_help_guide(
     guide = db.query(Guide).filter(
         Guide.id == guide_id,
         Guide.workspace_id == workspace.id,
-        Guide.help_center_published == True,
-        Guide.is_public == True,
+        Guide.help_center_published.is_(True),
+        Guide.is_public.is_(True),
     ).first()
     if not guide:
         raise HTTPException(status_code=404, detail="Guide not found")
@@ -160,8 +160,8 @@ def search_help_center(
 
         guides = db.query(Guide).filter(
             Guide.workspace_id == workspace.id,
-            Guide.help_center_published == True,
-            Guide.is_public == True,
+            Guide.help_center_published.is_(True),
+            Guide.is_public.is_(True),
             Guide.embedding.isnot(None),
         ).order_by(
             Guide.embedding.cosine_distance(query_embedding)
@@ -170,8 +170,8 @@ def search_help_center(
         # Fallback to text search
         guides = db.query(Guide).filter(
             Guide.workspace_id == workspace.id,
-            Guide.help_center_published == True,
-            Guide.is_public == True,
+            Guide.help_center_published.is_(True),
+            Guide.is_public.is_(True),
             Guide.title.ilike(f"%{q}%"),
         ).limit(limit).all()
 

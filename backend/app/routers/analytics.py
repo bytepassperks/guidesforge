@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.database import get_db, Guide, GuideStep, GuideAnalytics, User, Workspace, WorkspaceMember
+from app.models.database import Guide, GuideAnalytics, GuideStep, User, Workspace, WorkspaceMember, get_db
 from app.schemas.analytics import AnalyticsOverview, GuideAnalyticsDetail, StalenessReport
 from app.utils.auth import get_current_user
 
@@ -46,7 +46,7 @@ def get_overview(
 
     total_completions = db.query(func.count(GuideAnalytics.id)).filter(
         GuideAnalytics.guide_id.in_(guide_ids),
-        GuideAnalytics.completed == True,
+        GuideAnalytics.completed.is_(True),
         GuideAnalytics.created_at >= since,
     ).scalar() or 0
 
@@ -186,7 +186,7 @@ def get_staleness_report(
 
     guides = db.query(Guide).filter(
         Guide.workspace_id == ws.id,
-        Guide.staleness_detection_enabled == True,
+        Guide.staleness_detection_enabled.is_(True),
     ).all()
 
     stale_guides = []

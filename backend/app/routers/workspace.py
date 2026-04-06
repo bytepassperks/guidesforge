@@ -3,18 +3,22 @@ import secrets
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.database import get_db, Workspace, WorkspaceMember, User
-from app.schemas.workspace import (
-    WorkspaceCreate, WorkspaceUpdate, WorkspaceResponse,
-    MemberInvite, WorkspaceMemberResponse, SDKKeyResponse,
-)
-from app.utils.auth import get_current_user
-from app.services.plan_limits import check_seat_limit
-from app.services.email_service import send_invitation_email
 from app.config import settings
+from app.models.database import User, Workspace, WorkspaceMember, get_db
+from app.schemas.workspace import (
+    MemberInvite,
+    SDKKeyResponse,
+    WorkspaceCreate,
+    WorkspaceMemberResponse,
+    WorkspaceResponse,
+    WorkspaceUpdate,
+)
+from app.services.email_service import send_invitation_email
+from app.services.plan_limits import check_seat_limit
+from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 

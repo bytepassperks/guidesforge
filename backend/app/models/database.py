@@ -1,14 +1,11 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean, DateTime, ForeignKey,
-    create_engine, Index, JSON
-)
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, create_engine
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
-from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 

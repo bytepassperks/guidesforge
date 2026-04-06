@@ -1,7 +1,6 @@
+from typing import Any, Dict, List
+
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-from uuid import UUID
 
 
 class AnalyticsOverview(BaseModel):

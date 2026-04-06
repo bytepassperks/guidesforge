@@ -1,12 +1,11 @@
 """Guide step CRUD and regeneration routes."""
 import uuid
-from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.database import get_db, Guide, GuideStep, User, WorkspaceMember
-from app.schemas.guides import GuideStepResponse, GuideStepCreate, GuideStepUpdate
+from app.models.database import Guide, GuideStep, User, WorkspaceMember, get_db
+from app.schemas.guides import GuideStepResponse, GuideStepUpdate
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/guides/{guide_id}/steps", tags=["steps"])

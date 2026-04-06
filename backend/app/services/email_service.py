@@ -1,5 +1,6 @@
+from typing import Optional
+
 import requests
-from typing import Optional, Dict, Any
 
 from app.config import settings
 

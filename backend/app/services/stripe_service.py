@@ -1,5 +1,6 @@
-import stripe
 from typing import Optional
+
+import stripe
 
 from app.config import settings
 

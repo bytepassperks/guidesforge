@@ -2,14 +2,13 @@
 import base64
 import io
 import json
-import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.utils.s3 import upload_screenshot, upload_audio, upload_video, upload_annotated_screenshot
+from app.utils.s3 import upload_annotated_screenshot, upload_audio, upload_screenshot, upload_video
 
 
 def process_guide_steps(guide_id: str, steps_data: List[Dict], db: Session):
@@ -210,7 +209,7 @@ def _annotate_screenshots(steps: List, db: Session):
     """Use GPT-4o-mini to detect UI elements and annotate screenshots."""
     try:
         import openai
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw
 
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -329,9 +328,10 @@ def _assemble_video(guide, steps: List, db: Session):
 
 def _assemble_video_local(guide, steps: List, db: Session):
     """Local FFmpeg video assembly fallback."""
+    import os
     import subprocess
     import tempfile
-    import os
+
     import requests as req
 
     temp_dir = tempfile.mkdtemp()

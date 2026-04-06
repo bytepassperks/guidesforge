@@ -1,11 +1,10 @@
 """AI pipeline routes - process guide, check staleness, job status."""
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.database import get_db, Guide, User, WorkspaceMember
-from app.schemas.pipeline import ProcessGuideRequest, CheckStalenessRequest, JobStatusResponse
+from app.models.database import Guide, User, WorkspaceMember, get_db
+from app.schemas.pipeline import CheckStalenessRequest, JobStatusResponse, ProcessGuideRequest
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
@@ -76,6 +75,7 @@ def check_staleness(
 @router.get("/job/{task_id}", response_model=JobStatusResponse)
 def get_job_status(task_id: str):
     from celery.result import AsyncResult
+
     from app.services.celery_worker import celery_app
 
     result = AsyncResult(task_id, app=celery_app)

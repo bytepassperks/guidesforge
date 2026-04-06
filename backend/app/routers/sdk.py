@@ -1,15 +1,17 @@
 """SDK routes - init, event tracking, semantic search."""
 import uuid
 from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.database import get_db, Workspace, Guide, GuideStep, SDKSession, GuideAnalytics
+from app.models.database import Guide, GuideAnalytics, GuideStep, SDKSession, Workspace, get_db
 from app.schemas.sdk import (
-    SDKInitRequest, SDKInitResponse, SDKEventRequest,
-    SDKSearchRequest, SDKSearchResult,
+    SDKEventRequest,
+    SDKInitRequest,
+    SDKInitResponse,
+    SDKSearchRequest,
+    SDKSearchResult,
 )
 
 router = APIRouter(prefix="/api/sdk", tags=["sdk"])
@@ -27,7 +29,6 @@ def sdk_init(data: SDKInitRequest, db: Session = Depends(get_db)):
     workspace = _verify_sdk_key(data.api_key, db)
 
     # Check MAU limit
-    from datetime import timedelta
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     mau_count = db.query(SDKSession).filter(
         SDKSession.workspace_id == workspace.id,
@@ -52,7 +53,7 @@ def sdk_init(data: SDKInitRequest, db: Session = Depends(get_db)):
     if data.page_url:
         guides = db.query(Guide).filter(
             Guide.workspace_id == workspace.id,
-            Guide.is_public == True,
+            Guide.is_public.is_(True),
             Guide.status == "ready",
         ).all()
 
@@ -144,7 +145,7 @@ def sdk_search(data: SDKSearchRequest, db: Session = Depends(get_db)):
         # Cosine similarity search
         guides = db.query(Guide).filter(
             Guide.workspace_id == workspace.id,
-            Guide.is_public == True,
+            Guide.is_public.is_(True),
             Guide.status == "ready",
             Guide.embedding.isnot(None),
         ).order_by(
@@ -166,7 +167,7 @@ def sdk_search(data: SDKSearchRequest, db: Session = Depends(get_db)):
         # Fallback to text search
         guides = db.query(Guide).filter(
             Guide.workspace_id == workspace.id,
-            Guide.is_public == True,
+            Guide.is_public.is_(True),
             Guide.status == "ready",
             Guide.title.ilike(f"%{data.query}%"),
         ).limit(data.limit or 5).all()

@@ -1,16 +1,15 @@
 """Staleness detection using Playwright + pixel comparison.
 Runs as Render cron: 30 20 * * * (2 AM IST / 8:30 PM UTC)
 """
-import asyncio
 import io
-import numpy as np
-from typing import Optional, Dict
 from datetime import datetime
+from typing import Dict, Optional
 
+import numpy as np
 from PIL import Image
 from sqlalchemy.orm import Session
 
-from app.utils.s3 import upload_file, upload_diff_image
+from app.utils.s3 import upload_diff_image, upload_file
 
 
 async def capture_screenshot(url: str, cookies: Optional[list] = None) -> bytes:
