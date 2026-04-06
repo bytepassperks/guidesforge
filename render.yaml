@@ -135,3 +135,9 @@ databases:
     region: oregon
     postgresMajorVersion: 16
     ipAllowList: []
+
+keyValueStores:
+  - name: guidesforge-redis
+    plan: free
+    region: oregon
+    ipAllowList: []
