@@ -104,9 +104,12 @@ def enrich_guide_steps(guide_id: str, db: Session):
 
     except Exception as e:
         print(f"[PIPELINE] Pipeline error for guide {guide_id}: {e}")
-    finally:
-        # ALWAYS mark guide as ready - even if some steps failed
-        # Individual step failures are logged but shouldn't block the guide
+        guide.status = "failed"
+        guide.updated_at = datetime.utcnow()
+        db.commit()
+        print(f"[PIPELINE] Guide {guide_id} marked as failed")
+        raise
+    else:
         guide.status = "ready"
         guide.updated_at = datetime.utcnow()
         db.commit()
@@ -144,11 +147,12 @@ def _upload_screenshots_to_s3(steps: List, guide_id: str, db: Session):
 
 
 def _describe_screenshots(steps: List, db: Session):
-    """Describe each screenshot using Modal AI vision (GPT-4o-mini)."""
+    """Describe each screenshot using Modal AI vision (moondream2)."""
     import modal
     describe_fn = modal.Function.from_name(MODAL_APP_NAME, "describe_screenshot")
     print("[PIPELINE] Using Modal describe_screenshot for AI descriptions")
 
+    described = 0
     for step in steps:
         try:
             if step.screenshot_url and step.screenshot_url.startswith("http"):
@@ -163,6 +167,7 @@ def _describe_screenshots(steps: List, db: Session):
                 step.title = f"Step {step.step_number}"
                 step.description = result
                 step.script_text = result
+                described += 1
                 print(f"[PIPELINE] AI described step {step.step_number}: {result[:60]}...")
             else:
                 # No screenshot URL available yet — use upload metadata
@@ -171,6 +176,7 @@ def _describe_screenshots(steps: List, db: Session):
             print(f"[PIPELINE] Error describing step {step.step_number}: {e}")
             raise
 
+    print(f"[PIPELINE] Described {described}/{len(steps)} steps")
     db.commit()
 
 
