@@ -39,10 +39,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Respond immediately so the floating widget can show "Uploading..." state
       // The upload happens in the background
       stopRecording().then(function(result) {
-        // Notify popup if it's open
-        try {
-          chrome.runtime.sendMessage({ type: "UPLOAD_COMPLETE", result: result });
-        } catch (e) { /* popup might not be open */ }
+        // Notify popup and content script about upload result
+        chrome.runtime.sendMessage({ type: "UPLOAD_COMPLETE", result: result }).catch(function() {});
+        // Also notify the content script on the recording tab
+        if (result && result.tabId) {
+          chrome.tabs.sendMessage(result.tabId, { type: "UPLOAD_COMPLETE", result: result }).catch(function() {});
+        }
+      }).catch(function(err) {
+        console.log("GuidesForge: stopRecording error:", err);
+        chrome.runtime.sendMessage({ type: "UPLOAD_COMPLETE", result: { success: false, error: err.message } }).catch(function() {});
       });
       sendResponse({ success: true, uploading: true });
       return true;
@@ -202,6 +207,7 @@ async function stopRecording() {
   }
 
   const recording = { ...currentRecording };
+  const recordingTabId = currentRecording.tabId;
   currentRecording = {
     id: null,
     title: "",
@@ -211,19 +217,24 @@ async function stopRecording() {
     tabId: null,
   };
 
+  console.log("GuidesForge: Uploading recording with", recording.steps.length, "steps and", recording.events.length, "events");
+
   // Upload to GuidesForge API
   try {
     const result = await uploadRecording(recording);
-    return { success: true, guideId: result.guide_id };
+    console.log("GuidesForge: Upload successful, guide_id:", result.guide_id);
+    return { success: true, guideId: result.guide_id, tabId: recordingTabId };
   } catch (error) {
+    console.log("GuidesForge: Upload failed:", error.message);
     // Store locally if upload fails
     await chrome.storage.local.set({
       ["pending_" + recording.id]: recording,
     });
     return {
       success: false,
-      error: "Upload failed. Recording saved locally.",
+      error: "Upload failed: " + error.message + ". Recording saved locally.",
       localId: recording.id,
+      tabId: recordingTabId,
     };
   }
 }
@@ -282,7 +293,10 @@ async function uploadRecording(recording) {
   });
 
   if (!guideRes.ok) {
-    throw new Error("Upload failed: " + guideRes.status);
+    var errorBody = "";
+    try { errorBody = await guideRes.text(); } catch (e) {}
+    console.log("GuidesForge: Upload API error", guideRes.status, errorBody);
+    throw new Error("API " + guideRes.status + (errorBody ? ": " + errorBody.slice(0, 200) : ""));
   }
 
   return await guideRes.json();
