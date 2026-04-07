@@ -160,12 +160,7 @@ stopBtn.addEventListener("click", function() {
   chrome.runtime.sendMessage({ type: "STOP_RECORDING" }, function(response) {
     stopBtn.disabled = false;
     stopBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg> Stop &amp; Upload';
-    if (response && response.success) {
-      showState("done");
-    } else {
-      showState("done");
-      // Show error in done state if needed
-    }
+    showState("done");
   });
 });
 
@@ -190,6 +185,17 @@ setInterval(function() {
       if (response && response.stepsCount !== undefined) {
         stepsCount.textContent = String(response.stepsCount);
       }
+      // If background says not recording anymore but popup shows recording, sync state
+      if (response && !response.isRecording && !recordingState.classList.contains("hidden")) {
+        showState("done");
+      }
     });
   }
 }, 1000);
+
+// Listen for upload complete notification from background
+chrome.runtime.onMessage.addListener(function(message) {
+  if (message.type === "UPLOAD_COMPLETE") {
+    showState("done");
+  }
+});
