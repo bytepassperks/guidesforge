@@ -213,17 +213,20 @@
       if (cancelBtnEl) { cancelBtnEl.style.display = 'none'; }
 
       // Tell background to stop recording and upload
-      // Background will send STOP_RRWEB back to us which triggers stopRecordingFlow()
-      // We also set a timeout to remove widget in case STOP_RRWEB doesn't arrive
+      // Background responds immediately, then sends UPLOAD_COMPLETE when done
       chrome.runtime.sendMessage({ type: "STOP_RECORDING" }, function(response) {
-        // Give the STOP_RRWEB message time to arrive and clean up,
-        // but if it doesn't, clean up after 8 seconds (upload timeout)
+        if (chrome.runtime.lastError) {
+          console.log("GuidesForge: STOP_RECORDING error:", chrome.runtime.lastError.message);
+          stopRecordingFlow();
+          removeAllAnnotations();
+        }
+        // Fallback: if UPLOAD_COMPLETE never arrives, clean up after 30 seconds
         setTimeout(function() {
           if (floatingWidget) {
             stopRecordingFlow();
             removeAllAnnotations();
           }
-        }, 8000);
+        }, 30000);
       });
     });
     floatingWidget.querySelector(".gf-btn-cancel").addEventListener("click", function(e) {
@@ -479,6 +482,46 @@
         stopRecordingFlow();
         removeAllAnnotations();
         sendResponse({ cancelled: true });
+        break;
+      case "UPLOAD_COMPLETE":
+        // Background finished uploading - show result on widget then clean up
+        if (message.result && message.result.success) {
+          // Show success briefly
+          if (floatingWidget) {
+            var recLabel = floatingWidget.querySelector(".gf-rec-label");
+            var recDot = floatingWidget.querySelector(".gf-rec-dot");
+            var stopBtnEl = floatingWidget.querySelector(".gf-btn-stop");
+            if (recLabel) { recLabel.textContent = "Uploaded!"; }
+            if (recDot) { recDot.style.background = "#22c55e"; }
+            if (stopBtnEl) { stopBtnEl.innerHTML = "<span>Done!</span>"; }
+            setTimeout(function() {
+              stopRecordingFlow();
+              removeAllAnnotations();
+            }, 1500);
+          } else {
+            stopRecordingFlow();
+            removeAllAnnotations();
+          }
+        } else {
+          // Show error briefly
+          if (floatingWidget) {
+            var recLabel2 = floatingWidget.querySelector(".gf-rec-label");
+            var recDot2 = floatingWidget.querySelector(".gf-rec-dot");
+            var stopBtnEl2 = floatingWidget.querySelector(".gf-btn-stop");
+            var errorMsg = (message.result && message.result.error) || "Upload failed";
+            if (recLabel2) { recLabel2.textContent = "Error"; recLabel2.style.color = "#ef4444"; }
+            if (recDot2) { recDot2.style.background = "#ef4444"; recDot2.style.animation = "none"; }
+            if (stopBtnEl2) { stopBtnEl2.innerHTML = "<span>" + errorMsg + "</span>"; stopBtnEl2.style.color = "#ef4444"; stopBtnEl2.disabled = false; }
+            setTimeout(function() {
+              stopRecordingFlow();
+              removeAllAnnotations();
+            }, 5000);
+          } else {
+            stopRecordingFlow();
+            removeAllAnnotations();
+          }
+        }
+        sendResponse({ received: true });
         break;
       case "PING":
         sendResponse({ alive: true, isRecording: isRecording, isPaused: isPaused, stepNumber: stepNumber });
