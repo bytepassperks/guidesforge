@@ -115,7 +115,7 @@ async def upload_recording(
         creator_id=current_user.id,
         title=data.title or "Untitled Guide",
         description=f"Recorded via Chrome extension ({len(data.steps)} steps)",
-        status="processing",
+        status="ready",
         total_steps=len(data.steps),
         total_duration_seconds=(data.duration_ms // 1000) if data.duration_ms else 0,
     )
@@ -137,15 +137,26 @@ async def upload_recording(
     db.commit()
     db.refresh(guide)
 
-    # Queue the full AI pipeline
-    from app.services.celery_worker import process_guide_task
-    task = process_guide_task.delay(
-        guide_id=str(guide.id),
-        steps_data=data.steps,
-    )
+    # Try to queue the AI pipeline (Celery/Redis) for enrichment.
+    # If Celery is not available, the guide is already saved with steps
+    # and marked as "ready" so the user can see it in the dashboard.
+    task_id = None
+    try:
+        from app.services.celery_worker import process_guide_task
+        task = process_guide_task.delay(
+            guide_id=str(guide.id),
+            steps_data=data.steps,
+        )
+        task_id = task.id
+        # Mark as processing only if Celery accepted the task
+        guide.status = "processing"
+        db.commit()
+    except Exception as e:
+        # Celery/Redis not available - guide stays "ready" with basic steps
+        print(f"[UPLOAD] Celery not available, skipping AI pipeline: {e}")
 
     return {
-        "message": "Recording uploaded and processing started",
-        "task_id": task.id,
+        "message": "Recording uploaded successfully",
+        "task_id": task_id,
         "guide_id": str(guide.id),
     }
