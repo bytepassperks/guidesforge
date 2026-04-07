@@ -7,6 +7,7 @@ import Landing from "@/pages/Landing"
 import Login from "@/pages/Login"
 import Register from "@/pages/Register"
 import ForgotPassword from "@/pages/ForgotPassword"
+import ResetPassword from "@/pages/ResetPassword"
 import Dashboard from "@/pages/Dashboard"
 import GuideEditor from "@/pages/GuideEditor"
 import GuideViewer from "@/pages/GuideViewer"
@@ -62,6 +63,7 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/contact-sales" element={<ContactSales />} />
