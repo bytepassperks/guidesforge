@@ -36,15 +36,19 @@ celery_app.conf.beat_schedule = {
 
 
 @celery_app.task(bind=True, name="process_guide")
-def process_guide_task(self, guide_id: str, steps_data: list):
-    """Process a guide through the full AI pipeline."""
+def process_guide_task(self, guide_id: str):
+    """Process a guide through the full AI pipeline.
+
+    Enriches existing GuideStep records (created by upload_recording)
+    with S3 screenshots, AI descriptions, TTS audio, annotations, and video.
+    """
     from app.models.database import SessionLocal
-    from app.services.guide_pipeline import process_guide_steps
+    from app.services.guide_pipeline import enrich_guide_steps
 
     db = SessionLocal()
     try:
         self.update_state(state="PROCESSING", meta={"guide_id": guide_id, "step": "starting"})
-        process_guide_steps(guide_id, steps_data, db)
+        enrich_guide_steps(guide_id, db)
         return {"guide_id": guide_id, "status": "completed"}
     except Exception as e:
         self.update_state(state="FAILED", meta={"guide_id": guide_id, "error": str(e)})
