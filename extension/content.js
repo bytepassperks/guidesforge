@@ -5,6 +5,13 @@
 (function () {
   "use strict";
 
+  // Guard against duplicate injection - if already loaded, just update the reference
+  if (window.__guidesforge_content_loaded) {
+    console.log("GuidesForge: Content script already loaded, skipping re-init");
+    return;
+  }
+  window.__guidesforge_content_loaded = true;
+
   let rrwebStopFn = null;
   let isRecording = false;
   let isPaused = false;

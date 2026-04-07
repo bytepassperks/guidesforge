@@ -30,8 +30,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case "START_RECORDING":
-      startRecording(message.title, message.tabId || sender.tab?.id);
-      sendResponse({ success: true });
+      startRecording(message.title, message.tabId || sender.tab?.id).then(function() {
+        sendResponse({ success: true });
+      });
       return true;
 
     case "STOP_RECORDING":
@@ -100,7 +101,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-function startRecording(title, tabId) {
+async function startRecording(title, tabId) {
   isRecording = true;
   isPaused = false;
   currentRecording = {
@@ -116,8 +117,56 @@ function startRecording(title, tabId) {
   chrome.action.setBadgeBackgroundColor({ color: "#EF4444" });
   chrome.action.setBadgeText({ text: "REC" });
 
-  // Content script handles the floating widget and rrweb via START_RRWEB message
-  // The popup sends START_RRWEB after START_RECORDING
+  // Inject content script and start recording on the tab
+  if (tabId) {
+    // First try to ping the content script to see if it's already loaded
+    let contentScriptReady = false;
+    try {
+      await new Promise(function(resolve, reject) {
+        chrome.tabs.sendMessage(tabId, { type: "PING" }, function(response) {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            contentScriptReady = true;
+            resolve(response);
+          }
+        });
+      });
+    } catch (e) {
+      console.log("GuidesForge: Content script not found, injecting...");
+    }
+
+    // If content script is not loaded, inject it
+    if (!contentScriptReady) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          files: ["content.js"],
+        });
+        // Wait for content script to initialize
+        await new Promise(function(r) { setTimeout(r, 300); });
+      } catch (e) {
+        console.log("GuidesForge: Could not inject content script:", e.message);
+      }
+    }
+
+    // Send START_RRWEB to content script (shows countdown + floating widget)
+    try {
+      await new Promise(function(resolve, reject) {
+        chrome.tabs.sendMessage(tabId, { type: "START_RRWEB", withCountdown: true }, function(response) {
+          if (chrome.runtime.lastError) {
+            console.log("GuidesForge: START_RRWEB failed:", chrome.runtime.lastError.message);
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            console.log("GuidesForge: START_RRWEB sent successfully:", JSON.stringify(response));
+            resolve(response);
+          }
+        });
+      });
+    } catch (e) {
+      console.log("GuidesForge: Could not send START_RRWEB:", e.message);
+    }
+  }
 }
 
 async function stopRecording() {

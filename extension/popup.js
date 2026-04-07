@@ -137,25 +137,18 @@ startBtn.addEventListener("click", async function() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) return;
 
-  // Inject content script if not already injected
-  try {
-    await chrome.tabs.sendMessage(tab.id, { type: "PING" });
-  } catch (e) {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content.js"],
-    });
-  }
+  startBtn.disabled = true;
+  startBtn.textContent = "Starting...";
 
   // Tell background to start recording
+  // Background will inject content script and send START_RRWEB automatically
   chrome.runtime.sendMessage(
     { type: "START_RECORDING", title: title, tabId: tab.id },
     function() {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg> Start Recording';
       showState("recording");
       stepsCount.textContent = "0";
-
-      // Tell content script to start (shows countdown + floating widget)
-      chrome.tabs.sendMessage(tab.id, { type: "START_RRWEB", withCountdown: true });
     }
   );
 });
