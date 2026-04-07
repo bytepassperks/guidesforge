@@ -46,6 +46,7 @@ tts_image = base_image.pip_install(
 )
 
 # Vision image with moondream2 (free local vision model, no API cost)
+# v2: force container rebuild after replacing OpenAI with moondream2
 vision_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
@@ -58,6 +59,7 @@ vision_image = (
         "accelerate==1.0.0",
     )
     .apt_install("ffmpeg", "libsndfile1")
+    .run_commands("echo moondream2-v2")
 )
 
 # Whisper image for audio transcription (local model via faster-whisper, no API cost)
