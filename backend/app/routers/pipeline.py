@@ -120,10 +120,10 @@ async def upload_recording(
     db.flush()
 
     # Create guide steps from the recording data
-    for step_data in data.steps:
+    for idx, step_data in enumerate(data.steps):
         step = GuideStep(
             guide_id=guide.id,
-            step_number=step_data.get("step_number", 0),
+            step_number=step_data.get("step_number", idx + 1),
             description=step_data.get("description", ""),
             page_url=step_data.get("page_url", ""),
             element_selector=step_data.get("dom_selector"),

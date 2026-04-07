@@ -330,21 +330,30 @@
 
     var selector = getUniqueSelector(target);
     var description = describeClick(target);
+    var clickX = event.clientX;
+    var clickY = event.clientY;
 
     await new Promise(function(r) { setTimeout(r, 300); });
 
     stepNumber++;
     var currentStep = stepNumber;
 
-    chrome.runtime.sendMessage({
-      type: "STEP_CAPTURED",
-      selector: selector,
-      description: description,
-      url: window.location.href,
-      pageTitle: document.title,
-      elementText: (target.textContent || "").trim().slice(0, 200),
-      elementTag: target.tagName.toLowerCase(),
-      stepNumber: currentStep,
+    // Capture screenshot via background service worker
+    chrome.runtime.sendMessage({ type: "CAPTURE_TAB" }, function(response) {
+      var screenshotDataUrl = (response && response.dataUrl) || null;
+      chrome.runtime.sendMessage({
+        type: "STEP_CAPTURED",
+        selector: selector,
+        description: description,
+        url: window.location.href,
+        pageTitle: document.title,
+        elementText: (target.textContent || "").trim().slice(0, 200),
+        elementTag: target.tagName.toLowerCase(),
+        stepNumber: currentStep,
+        clickX: clickX,
+        clickY: clickY,
+        screenshot: screenshotDataUrl,
+      });
     });
 
     showStepAnnotation(target, currentStep);
@@ -376,13 +385,21 @@
       var currentStep = stepNumber;
       var selector = getUniqueSelector(target);
       var description = describeInput(target, value);
+      var rect = target.getBoundingClientRect();
+      var inputClickX = Math.round(rect.left + rect.width / 2);
+      var inputClickY = Math.round(rect.top + rect.height / 2);
 
-      chrome.runtime.sendMessage({
-        type: "STEP_CAPTURED",
-        selector: selector, description: description,
-        url: window.location.href, pageTitle: document.title,
-        elementText: type === "password" ? "********" : value.slice(0, 200),
-        elementTag: tag, stepNumber: currentStep,
+      chrome.runtime.sendMessage({ type: "CAPTURE_TAB" }, function(response) {
+        var screenshotDataUrl = (response && response.dataUrl) || null;
+        chrome.runtime.sendMessage({
+          type: "STEP_CAPTURED",
+          selector: selector, description: description,
+          url: window.location.href, pageTitle: document.title,
+          elementText: type === "password" ? "********" : value.slice(0, 200),
+          elementTag: tag, stepNumber: currentStep,
+          clickX: inputClickX, clickY: inputClickY,
+          screenshot: screenshotDataUrl,
+        });
       });
 
       showStepAnnotation(target, currentStep);
