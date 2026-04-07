@@ -18,11 +18,22 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Auth endpoints that should NOT trigger token refresh on 401
+const AUTH_ENDPOINTS = ["/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/api/auth/reset-password"]
+
 // Response interceptor for token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+    const requestUrl = originalRequest?.url || ""
+
+    // Skip token refresh for auth endpoints — let the caller handle the error directly
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((ep) => requestUrl.includes(ep))
+    if (isAuthEndpoint) {
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       const refreshToken = localStorage.getItem("refresh_token")
