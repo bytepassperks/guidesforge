@@ -113,20 +113,14 @@ def _upload_screenshots_to_s3(steps: List, guide_id: str, db: Session):
 
 
 def _describe_screenshots(steps: List, db: Session):
-    """Describe each screenshot using Modal AI or metadata fallback."""
-    modal_available = False
-
-    try:
-        import modal
-        describe_fn = modal.Function.from_name(MODAL_APP_NAME, "describe_screenshot")
-        modal_available = True
-        print("[PIPELINE] Using Modal describe_screenshot for AI descriptions")
-    except Exception as e:
-        print(f"[PIPELINE] Modal describe_screenshot not available: {e}")
+    """Describe each screenshot using Modal AI vision (GPT-4o-mini)."""
+    import modal
+    describe_fn = modal.Function.from_name(MODAL_APP_NAME, "describe_screenshot")
+    print("[PIPELINE] Using Modal describe_screenshot for AI descriptions")
 
     for step in steps:
         try:
-            if modal_available and step.screenshot_url and step.screenshot_url.startswith("http"):
+            if step.screenshot_url and step.screenshot_url.startswith("http"):
                 # Use Modal AI vision to describe the screenshot
                 result = describe_fn.remote(
                     screenshot_url=step.screenshot_url,
@@ -137,11 +131,11 @@ def _describe_screenshots(steps: List, db: Session):
                 step.script_text = result
                 print(f"[PIPELINE] AI described step {step.step_number}: {result[:60]}...")
             else:
-                # Metadata-based fallback (zero API cost)
+                # No screenshot URL available yet — use upload metadata
                 _describe_step_from_metadata(step)
         except Exception as e:
             print(f"[PIPELINE] Error describing step {step.step_number}: {e}")
-            _describe_step_from_metadata(step)
+            raise
 
     db.commit()
 
@@ -309,45 +303,31 @@ def _annotate_screenshots(steps: List, db: Session):
 
 
 def _assemble_video(guide, steps: List, db: Session):
-    """Assemble MP4 video from annotated screenshots + audio using Modal or local FFmpeg."""
-    # First try Modal
-    try:
-        import modal
-        assemble_fn = modal.Function.from_name(MODAL_APP_NAME, "assemble_video")
+    """Assemble MP4 video from annotated screenshots + audio via Modal."""
+    import modal
+    assemble_fn = modal.Function.from_name(MODAL_APP_NAME, "assemble_video")
 
-        steps_data = []
-        for step in steps:
-            steps_data.append({
-                "step_number": step.step_number,
-                "screenshot_url": step.annotated_screenshot_url or step.screenshot_url,
-                "audio_url": step.audio_url,
-                "title": step.title,
-            })
+    steps_data = []
+    for step in steps:
+        steps_data.append({
+            "step_number": step.step_number,
+            "screenshot_url": step.annotated_screenshot_url or step.screenshot_url,
+            "audio_url": step.audio_url,
+            "title": step.title,
+        })
 
-        video_url = assemble_fn.remote(
-            guide_id=str(guide.id),
-            steps=steps_data,
-        )
-
-        if video_url:
-            guide.video_url = video_url
-            guide.total_duration_seconds = len(steps) * 5
-            db.commit()
-            print(f"[PIPELINE] Video assembled via Modal: {video_url[:80]}...")
-            return
-
-    except Exception as e:
-        print(f"[PIPELINE] Video assembly not available via Modal: {e}")
-
-    # Fallback: try local FFmpeg
-    has_screenshots = any(
-        step.screenshot_url and step.screenshot_url.startswith("http")
-        for step in steps
+    video_url = assemble_fn.remote(
+        guide_id=str(guide.id),
+        steps=steps_data,
     )
-    if has_screenshots:
-        _assemble_video_local(guide, steps, db)
+
+    if video_url:
+        guide.video_url = video_url
+        guide.total_duration_seconds = len(steps) * 5
+        db.commit()
+        print(f"[PIPELINE] Video assembled via Modal: {video_url[:80]}...")
     else:
-        print("[PIPELINE] Skipping video assembly - no screenshots available")
+        print(f"[PIPELINE] Video assembly returned empty URL for guide {guide.id}")
 
 
 def _assemble_video_local(guide, steps: List, db: Session):

@@ -97,9 +97,11 @@ export default function Dashboard() {
     const styles: Record<string, string> = {
       draft: "bg-gray-500/10 text-gray-400",
       processing: "bg-yellow-500/10 text-yellow-400",
+      ready: "bg-blue-500/10 text-blue-400",
       published: "bg-green-500/10 text-green-400",
       stale: "bg-orange-500/10 text-orange-400",
       error: "bg-red-500/10 text-red-400",
+      failed: "bg-red-500/10 text-red-400",
     }
     return (
       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || styles.draft}`}>
@@ -146,6 +148,7 @@ export default function Dashboard() {
             <option value="draft">Draft</option>
             <option value="processing">Processing</option>
             <option value="published">Published</option>
+            <option value="ready">Ready</option>
             <option value="stale">Stale</option>
           </select>
         </div>

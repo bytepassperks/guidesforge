@@ -47,7 +47,8 @@ tts_image = base_image.pip_install(
 
 # Vision image with transformers
 vision_image = base_image.pip_install(
-    "openai==1.50.0",
+    "openai>=1.58.0",
+    "httpx>=0.28.0",
 )
 
 # Whisper image for audio transcription (local model via faster-whisper, no API cost)
