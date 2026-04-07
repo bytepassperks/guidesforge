@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import DashboardLayout from "@/components/layout/DashboardLayout"
@@ -42,7 +42,15 @@ interface Workspace {
 
 export default function Dashboard() {
   const [search, setSearch] = useState("")
+  const [searchInput, setSearchInput] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => setSearch(searchInput), 300)
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
+  }, [searchInput])
   const [showCreate, setShowCreate] = useState(false)
   const [newTitle, setNewTitle] = useState("")
   const [newDesc, setNewDesc] = useState("")
@@ -131,8 +139,8 @@ export default function Dashboard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search guides..."
               className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition"
             />

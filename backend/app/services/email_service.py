@@ -96,6 +96,32 @@ def send_invitation_email(
     return send_email_mailgun(to, f"[GuidesForge] You're invited to {workspace_name}", html)
 
 
+def send_password_reset_email(to: str, reset_token: str) -> bool:
+    reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+    html = f"""
+    <div style="font-family: 'Satoshi', sans-serif; max-width: 600px; margin: 0 auto; background: #0C0D14; color: #FFFFFF; padding: 40px; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #6366F1; margin: 0;">GuidesForge</h1>
+        </div>
+        <h2 style="color: #FFFFFF;">Reset Your Password</h2>
+        <p style="color: #94A3B8; line-height: 1.6;">
+            We received a request to reset your password. Click the button below to set a new password.
+            This link expires in 1 hour.
+        </p>
+        <div style="text-align: center; margin-top: 32px;">
+            <a href="{reset_link}"
+               style="background: #6366F1; color: white; padding: 12px 32px; border-radius: 9999px; text-decoration: none; font-weight: 600;">
+                Reset Password
+            </a>
+        </div>
+        <p style="color: #64748B; font-size: 12px; margin-top: 24px; line-height: 1.6;">
+            If you didn't request this, you can safely ignore this email.
+        </p>
+    </div>
+    """
+    return send_email_mailgun(to, "[GuidesForge] Reset your password", html)
+
+
 def send_welcome_email(to: str, full_name: str) -> bool:
     html = f"""
     <div style="font-family: 'Satoshi', sans-serif; max-width: 600px; margin: 0 auto; background: #0C0D14; color: #FFFFFF; padding: 40px; border-radius: 16px;">

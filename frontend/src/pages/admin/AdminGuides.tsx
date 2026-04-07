@@ -10,6 +10,7 @@ import {
   Trash2,
   Eye,
   Loader2,
+  RefreshCw,
 } from "lucide-react"
 
 export default function AdminGuides() {
@@ -25,6 +26,11 @@ export default function AdminGuides() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => adminGuidesAPI.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-guides"] }),
+  })
+
+  const reprocessMutation = useMutation({
+    mutationFn: (id: string) => adminGuidesAPI.reprocess(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-guides"] }),
   })
 
@@ -117,12 +123,23 @@ export default function AdminGuides() {
                           href={`/guides/${g.id}`}
                           target="_blank"
                           className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition"
+                          aria-label={`View guide ${g.title}`}
                         >
                           <Eye className="w-4 h-4" />
                         </a>
                         <button
+                          onClick={() => reprocessMutation.mutate(g.id as string)}
+                          disabled={reprocessMutation.isPending}
+                          className="p-1.5 rounded-lg hover:bg-indigo-500/10 text-gray-500 hover:text-indigo-400 transition disabled:opacity-50"
+                          aria-label={`Reprocess guide ${g.title}`}
+                          title="Reprocess through AI pipeline"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${reprocessMutation.isPending ? "animate-spin" : ""}`} />
+                        </button>
+                        <button
                           onClick={() => { if (confirm(`Delete guide "${g.title}"?`)) deleteMutation.mutate(g.id as string) }}
                           className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition"
+                          aria-label={`Delete guide ${g.title}`}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

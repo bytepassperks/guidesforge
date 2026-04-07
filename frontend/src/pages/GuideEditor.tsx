@@ -62,6 +62,7 @@ export default function GuideEditor() {
   const [editDescription, setEditDescription] = useState("")
   const [showEmbed, setShowEmbed] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   const { data: guideData, isLoading: guideLoading } = useQuery({
     queryKey: ["guide", guideId],
@@ -141,7 +142,12 @@ export default function GuideEditor() {
   }
 
   function handleSave() {
-    updateGuide.mutate({ title, description: description || null })
+    updateGuide.mutate({ title, description: description || null }, {
+      onSuccess: () => {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      },
+    })
   }
 
   if (guideLoading || stepsLoading) {
@@ -201,14 +207,19 @@ export default function GuideEditor() {
             >
               <Code className="w-4 h-4" /> Embed
             </button>
-            <button
-              onClick={handleProcessGuide}
-              disabled={processing || steps.length === 0}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 transition disabled:opacity-50"
-            >
-              {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              Process
-            </button>
+            <div className="relative group">
+              <button
+                onClick={handleProcessGuide}
+                disabled={processing || steps.length === 0}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/5 border border-white/10 transition disabled:opacity-50"
+              >
+                {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                Process
+              </button>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-[#1A1B23] border border-white/10 rounded-lg text-xs text-gray-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none">
+                {steps.length === 0 ? "Add steps first to process this guide" : "Run AI pipeline: generate narration, TTS audio, and video"}
+              </div>
+            </div>
             {guide.status === "draft" && (
               <button
                 onClick={() => publishGuide.mutate()}
@@ -223,8 +234,8 @@ export default function GuideEditor() {
               disabled={updateGuide.isPending}
               className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition disabled:opacity-50"
             >
-              {updateGuide.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save
+              {updateGuide.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+              {saved ? "Saved" : "Save"}
             </button>
           </div>
         </div>

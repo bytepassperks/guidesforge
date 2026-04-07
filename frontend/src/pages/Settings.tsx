@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useSearchParams } from "react-router-dom"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { useAuth } from "@/hooks/useAuth"
 import { workspacesAPI, authAPI } from "@/services/api"
@@ -18,6 +19,10 @@ import {
   Loader2,
   RefreshCw,
   Upload,
+  Eye,
+  EyeOff,
+  Lock,
+  CheckCircle2,
 } from "lucide-react"
 
 interface Workspace {
@@ -42,9 +47,19 @@ interface Member {
 export default function Settings() {
   const { user, refreshUser } = useAuth()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState("profile")
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get("tab") || "profile"
+  const setTab = (t: string) => setSearchParams({ tab: t })
   const [fullName, setFullName] = useState("")
   const [copied, setCopied] = useState(false)
+  const [showSDKKey, setShowSDKKey] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [wsSaved, setWsSaved] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmNewPassword, setConfirmNewPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+  const [passwordSaved, setPasswordSaved] = useState(false)
   const [wsName, setWsName] = useState("")
   const [wsSlug, setWsSlug] = useState("")
   const [wsBrandColor, setWsBrandColor] = useState("#6366F1")
@@ -81,7 +96,24 @@ export default function Settings() {
 
   const updateProfile = useMutation({
     mutationFn: () => authAPI.updateMe({ full_name: fullName }),
-    onSuccess: () => refreshUser(),
+    onSuccess: () => {
+      refreshUser()
+      setProfileSaved(true)
+      setTimeout(() => setProfileSaved(false), 3000)
+    },
+  })
+
+  const changePassword = useMutation({
+    mutationFn: () => authAPI.changePassword({ current_password: currentPassword, new_password: newPassword }),
+    onSuccess: () => {
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmNewPassword("")
+      setPasswordError("")
+      setPasswordSaved(true)
+      setTimeout(() => setPasswordSaved(false), 3000)
+    },
+    onError: () => setPasswordError("Current password is incorrect"),
   })
 
   const updateWorkspace = useMutation({
@@ -92,7 +124,11 @@ export default function Settings() {
         brand_color: wsBrandColor,
         help_center_enabled: wsHelpCenter,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] })
+      setWsSaved(true)
+      setTimeout(() => setWsSaved(false), 3000)
+    },
   })
 
   const inviteMember = useMutation({
@@ -194,14 +230,50 @@ export default function Settings() {
                 )}
               </div>
             </div>
-            <button
-              onClick={() => updateProfile.mutate()}
-              disabled={updateProfile.isPending}
-              className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
-            >
-              {updateProfile.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Profile
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => updateProfile.mutate()}
+                disabled={updateProfile.isPending}
+                className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+              >
+                {updateProfile.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save Profile
+              </button>
+              {profileSaved && (
+                <span className="flex items-center gap-1 text-green-400 text-sm"><CheckCircle2 className="w-4 h-4" /> Saved</span>
+              )}
+            </div>
+
+            {/* Change Password */}
+            <div className="border-t border-white/5 pt-5 mt-5">
+              <h4 className="text-sm font-medium text-white mb-3 flex items-center gap-2"><Lock className="w-4 h-4 text-gray-400" /> Change Password</h4>
+              {passwordError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-2 mb-3">{passwordError}</div>
+              )}
+              <div className="space-y-3">
+                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:border-indigo-500 outline-none transition" placeholder="Current password" />
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:border-indigo-500 outline-none transition" placeholder="New password (min 8 characters)" />
+                <input type="password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:border-indigo-500 outline-none transition" placeholder="Confirm new password" />
+              </div>
+              <div className="flex items-center gap-3 mt-3">
+                <button
+                  onClick={() => {
+                    if (newPassword.length < 8) { setPasswordError("New password must be at least 8 characters"); return }
+                    if (newPassword !== confirmNewPassword) { setPasswordError("Passwords do not match"); return }
+                    setPasswordError("")
+                    changePassword.mutate()
+                  }}
+                  disabled={changePassword.isPending || !currentPassword || !newPassword}
+                  className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl text-sm font-medium border border-white/10 transition disabled:opacity-50"
+                >
+                  {changePassword.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                  Update Password
+                </button>
+                {passwordSaved && (
+                  <span className="flex items-center gap-1 text-green-400 text-sm"><CheckCircle2 className="w-4 h-4" /> Password updated</span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -267,10 +339,20 @@ export default function Settings() {
               {updateWorkspace.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save Workspace
             </button>
+            {wsSaved && (
+              <span className="flex items-center gap-1 text-green-400 text-sm ml-3"><CheckCircle2 className="w-4 h-4" /> Saved</span>
+            )}
           </div>
         )}
 
         {/* Team */}
+        {tab === "team" && !workspace && (
+          <div className="glass-card rounded-2xl p-8 text-center">
+            <Users className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-white mb-2">No workspace yet</h3>
+            <p className="text-sm text-gray-400">Create a workspace first to manage team members.</p>
+          </div>
+        )}
         {tab === "team" && workspace && (
           <div className="space-y-6">
             <div className="glass-card rounded-2xl p-6">
@@ -341,11 +423,18 @@ export default function Settings() {
               <label className="block text-sm font-medium text-gray-300 mb-1.5">SDK Key</label>
               <div className="flex gap-2">
                 <input
-                  type="text"
+                  type={showSDKKey ? "text" : "password"}
                   value={workspace.sdk_key || "Not generated"}
                   readOnly
                   className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-gray-300 text-sm font-mono"
                 />
+                <button
+                  onClick={() => setShowSDKKey(!showSDKKey)}
+                  className="flex items-center gap-1 px-3 py-2.5 rounded-xl text-sm border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition"
+                  aria-label={showSDKKey ? "Hide SDK key" : "Show SDK key"}
+                >
+                  {showSDKKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
                 <button
                   onClick={handleCopySDK}
                   className="flex items-center gap-1 px-3 py-2.5 rounded-xl text-sm border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition"

@@ -52,28 +52,28 @@ const plans = [
     name: "Starter",
     price: "$15",
     period: "/month",
-    inr: "₹999",
     features: ["100 guides/month", "All output formats", "SDK embed (100 MAU)", "Staleness alerts", "No watermark"],
     cta: "Start Free Trial",
     popular: false,
+    href: "/register",
   },
   {
     name: "Pro",
     price: "$39",
     period: "/month",
-    inr: "₹2,499",
     features: ["Unlimited guides", "Voice cloning", "5 team seats", "SDK (1K MAU)", "Advanced analytics", "Priority support"],
     cta: "Start Free Trial",
     popular: true,
+    href: "/register",
   },
   {
     name: "Business",
     price: "$99",
     period: "/month",
-    inr: "₹6,999",
     features: ["Everything in Pro", "White-label", "10 seats", "SDK (10K MAU)", "Custom domain", "SSO (SAML)"],
     cta: "Contact Sales",
     popular: false,
+    href: "/contact-sales",
   },
 ]
 
@@ -371,8 +371,7 @@ export default function Landing() {
                   <span className="text-3xl font-bold font-cabinet">{plan.price}</span>
                   <span className="text-gray-400 text-sm">{plan.period}</span>
                 </div>
-                {plan.inr && <p className="text-xs text-gray-500 mb-4">or {plan.inr}/mo</p>}
-                {!plan.inr && <div className="mb-4" />}
+                <div className="mb-4" />
                 <ul className="space-y-3 mb-6">
                   {plan.features.map((f, j) => (
                     <li key={j} className="flex items-center gap-2 text-sm text-gray-300">
@@ -382,7 +381,7 @@ export default function Landing() {
                   ))}
                 </ul>
                 <Link
-                  to="/register"
+                  to={plan.href || "/register"}
                   className={`block text-center py-2.5 rounded-full text-sm font-medium transition ${
                     plan.popular
                       ? "bg-indigo-500 hover:bg-indigo-600 text-white"
@@ -418,7 +417,7 @@ export default function Landing() {
         <div className="max-w-3xl mx-auto text-center animate-fade-in">
           <div className="inline-flex items-center gap-2 mb-6">
             <Users className="w-5 h-5 text-indigo-400" />
-            <span className="text-sm text-gray-400">Join 500+ teams already using GuidesForge</span>
+            <span className="text-sm text-gray-400">Join teams already using GuidesForge</span>
           </div>
           <h2 className="text-3xl md:text-4xl font-bold mb-4 font-cabinet">
             Ready to automate your documentation?
@@ -460,16 +459,17 @@ export default function Landing() {
               <h4 className="text-sm font-semibold text-white mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-gray-500">
                 <li><a href="mailto:support@guidesforge.org" className="hover:text-gray-300 transition">Support</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">Terms of Service</a></li>
+                <li><Link to="/privacy" className="hover:text-gray-300 transition">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="hover:text-gray-300 transition">Terms of Service</Link></li>
+                <li><Link to="/contact-sales" className="hover:text-gray-300 transition">Contact Sales</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white mb-4">Developers</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><a href="/api/docs" className="hover:text-gray-300 transition">API Docs</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">Chrome Extension</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">SDK</a></li>
+                <li><a href="https://guidesforge-api.onrender.com/api/docs" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300 transition">API Docs</a></li>
+                <li><a href="https://chrome.google.com/webstore" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300 transition">Chrome Extension</a></li>
+                <li><Link to="/settings?tab=sdk" className="hover:text-gray-300 transition">SDK</Link></li>
               </ul>
             </div>
           </div>

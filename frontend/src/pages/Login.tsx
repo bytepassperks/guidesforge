@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/hooks/useAuth"
-import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react"
 
 export default function Login() {
   const [email, setEmail] = useState("")
@@ -15,13 +15,23 @@ export default function Login() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
+
+    if (!email.trim()) {
+      setError("Please enter your email address")
+      return
+    }
+    if (!password) {
+      setError("Please enter your password")
+      return
+    }
+
     setLoading(true)
     try {
       await login(email, password)
       navigate("/dashboard")
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } }
-      setError(axiosErr.response?.data?.detail || "Invalid credentials")
+      setError(axiosErr.response?.data?.detail || "Invalid email or password. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -40,38 +50,49 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-8 space-y-5">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3">
-              {error}
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
             <input
+              id="login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition"
               placeholder="you@company.com"
-              required
+              autoComplete="email"
+              aria-label="Email address"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-300">Password</label>
+              <Link to="/forgot-password" className="text-xs text-indigo-400 hover:text-indigo-300 transition">
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <input
+                id="login-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition pr-10"
                 placeholder="Enter your password"
-                required
+                autoComplete="current-password"
+                aria-label="Password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

@@ -28,6 +28,52 @@ from app.utils.s3 import upload_voice_profile
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+@router.post("/forgot-password")
+def forgot_password(data: dict, db: Session = Depends(get_db)):
+    """Request a password reset link via email."""
+    email = data.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    user = db.query(User).filter(User.email == email).first()
+    # Always return success to prevent email enumeration
+    if user:
+        try:
+            from app.services.email_service import send_password_reset_email
+            reset_token = create_access_token({"sub": str(user.id), "purpose": "reset"}, expires_delta=timedelta(hours=1))
+            send_password_reset_email(user.email, reset_token)
+        except Exception:
+            pass
+
+    return {"message": "If an account with that email exists, we've sent a password reset link."}
+
+
+@router.post("/change-password")
+def change_password(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change password for authenticated user."""
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Current password and new password required")
+
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+
+    if not verify_password(current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.password_hash = hash_password(new_password)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Password changed successfully"}
+
+
 @router.post("/register", response_model=TokenResponse)
 def register(data: UserRegister, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == data.email).first()
