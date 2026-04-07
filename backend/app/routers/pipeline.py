@@ -32,10 +32,7 @@ def process_guide(
 
     # Queue processing via Celery
     from app.services.celery_worker import process_guide_task
-    task = process_guide_task.delay(
-        guide_id=str(data.guide_id),
-        steps_data=data.steps,
-    )
+    task = process_guide_task.delay(guide_id=str(data.guide_id))
 
     return {
         "message": "Guide processing started",
@@ -96,7 +93,7 @@ async def upload_recording(
     """Receive recording data from the Chrome extension.
 
     Creates a new guide automatically from the recording title and steps,
-    then queues the AI pipeline for processing.
+    then queues the AI pipeline (Celery) for full processing.
     """
     # Find the user's workspace
     member = db.query(WorkspaceMember).filter(
@@ -109,13 +106,13 @@ async def upload_recording(
     if not workspace:
         raise HTTPException(status_code=400, detail="Workspace not found")
 
-    # Create the guide
+    # Create the guide with status "processing" - Celery will set it to "ready"
     guide = Guide(
         workspace_id=workspace.id,
         creator_id=current_user.id,
         title=data.title or "Untitled Guide",
         description=f"Recorded via Chrome extension ({len(data.steps)} steps)",
-        status="ready",
+        status="processing",
         total_steps=len(data.steps),
         total_duration_seconds=(data.duration_ms // 1000) if data.duration_ms else 0,
     )
@@ -130,6 +127,8 @@ async def upload_recording(
             description=step_data.get("description", ""),
             page_url=step_data.get("page_url", ""),
             element_selector=step_data.get("dom_selector"),
+            click_x=step_data.get("click_x"),
+            click_y=step_data.get("click_y"),
             screenshot_url=step_data.get("screenshot_data_url", ""),
         )
         db.add(step)
@@ -137,26 +136,12 @@ async def upload_recording(
     db.commit()
     db.refresh(guide)
 
-    # Try to queue the AI pipeline (Celery/Redis) for enrichment.
-    # If Celery is not available, the guide is already saved with steps
-    # and marked as "ready" so the user can see it in the dashboard.
-    task_id = None
-    try:
-        from app.services.celery_worker import process_guide_task
-        task = process_guide_task.delay(
-            guide_id=str(guide.id),
-            steps_data=data.steps,
-        )
-        task_id = task.id
-        # Mark as processing only if Celery accepted the task
-        guide.status = "processing"
-        db.commit()
-    except Exception as e:
-        # Celery/Redis not available - guide stays "ready" with basic steps
-        print(f"[UPLOAD] Celery not available, skipping AI pipeline: {e}")
+    # Queue the AI pipeline via Celery for full enrichment
+    from app.services.celery_worker import process_guide_task
+    task = process_guide_task.delay(guide_id=str(guide.id))
 
     return {
         "message": "Recording uploaded successfully",
-        "task_id": task_id,
+        "task_id": task.id,
         "guide_id": str(guide.id),
     }

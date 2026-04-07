@@ -11,14 +11,18 @@ from app.config import settings
 from app.utils.s3 import upload_annotated_screenshot, upload_audio, upload_screenshot, upload_video
 
 
-def process_guide_steps(guide_id: str, steps_data: List[Dict], db: Session):
-    """Full AI processing pipeline for a guide:
-    1. Upload screenshots to S3
+def enrich_guide_steps(guide_id: str, db: Session):
+    """Enrich existing guide steps created by upload_recording.
+
+    Works with EXISTING GuideStep records in the DB (no duplicates).
+    Full AI processing pipeline:
+    1. Upload screenshots to S3 (convert data URLs → S3)
     2. Describe each screenshot (GPT-4o-mini)
     3. Assemble narration script
-    4. Generate TTS audio per step (Kokoro)
-    5. Annotate screenshots (OmniParser)
+    4. Generate TTS audio per step (Kokoro via Modal)
+    5. Annotate screenshots (GPT-4o-mini + Pillow)
     6. Assemble final MP4 video (FFmpeg)
+    7. Generate embedding for semantic search
     """
     from app.models.database import Guide, GuideStep
 
@@ -27,43 +31,38 @@ def process_guide_steps(guide_id: str, steps_data: List[Dict], db: Session):
         raise ValueError(f"Guide {guide_id} not found")
 
     try:
-        # Step 1: Upload screenshots and create step records
-        created_steps = []
-        for step_data in steps_data:
-            screenshot_bytes = base64.b64decode(step_data["screenshot_data"])
-            screenshot_url = upload_screenshot(screenshot_bytes, str(guide_id), step_data["step_number"])
+        # Load existing steps from DB (created by upload_recording)
+        existing_steps = (
+            db.query(GuideStep)
+            .filter(GuideStep.guide_id == guide_id)
+            .order_by(GuideStep.step_number)
+            .all()
+        )
 
-            step = GuideStep(
-                guide_id=guide_id,
-                step_number=step_data["step_number"],
-                page_url=step_data["page_url"],
-                element_selector=step_data.get("element_selector"),
-                click_x=step_data.get("click_x"),
-                click_y=step_data.get("click_y"),
-                screenshot_url=screenshot_url,
-                baseline_screenshot_url=screenshot_url,
-            )
-            db.add(step)
-            db.flush()
-            created_steps.append(step)
+        if not existing_steps:
+            print(f"[PIPELINE] No steps found for guide {guide_id}")
+            guide.status = "ready"
+            guide.updated_at = datetime.utcnow()
+            db.commit()
+            return
 
-        guide.total_steps = len(created_steps)
-        db.commit()
+        # Step 1: Upload screenshot data URLs to S3
+        _upload_screenshots_to_s3(existing_steps, str(guide_id), db)
 
         # Step 2: Describe screenshots via AI
-        _describe_screenshots(created_steps, db)
+        _describe_screenshots(existing_steps, db)
 
         # Step 3: Assemble narration script
-        _assemble_script(guide, created_steps, db)
+        _assemble_script(guide, existing_steps, db)
 
         # Step 4: Generate TTS audio
-        _generate_tts_audio(guide, created_steps, db)
+        _generate_tts_audio(guide, existing_steps, db)
 
         # Step 5: Annotate screenshots
-        _annotate_screenshots(created_steps, db)
+        _annotate_screenshots(existing_steps, db)
 
         # Step 6: Assemble video
-        _assemble_video(guide, created_steps, db)
+        _assemble_video(guide, existing_steps, db)
 
         # Mark guide as ready
         guide.status = "ready"
@@ -71,12 +70,42 @@ def process_guide_steps(guide_id: str, steps_data: List[Dict], db: Session):
         db.commit()
 
         # Step 7: Generate embedding for semantic search
-        _generate_embedding(guide, created_steps, db)
+        _generate_embedding(guide, existing_steps, db)
 
     except Exception as e:
         guide.status = "failed"
         db.commit()
         raise e
+
+
+def _upload_screenshots_to_s3(steps: List, guide_id: str, db: Session):
+    """Convert data URL screenshots to S3 uploads."""
+    for step in steps:
+        if not step.screenshot_url:
+            continue
+
+        # Check if already an S3 URL (not a data URL)
+        if step.screenshot_url.startswith("http"):
+            continue
+
+        try:
+            # Handle data URL format: data:image/png;base64,iVBOR...
+            screenshot_data = step.screenshot_url
+            if screenshot_data.startswith("data:"):
+                # Strip data URL prefix
+                _, encoded = screenshot_data.split(",", 1)
+                screenshot_bytes = base64.b64decode(encoded)
+            else:
+                # Try raw base64
+                screenshot_bytes = base64.b64decode(screenshot_data)
+
+            s3_url = upload_screenshot(screenshot_bytes, guide_id, step.step_number)
+            step.screenshot_url = s3_url
+            step.baseline_screenshot_url = s3_url
+        except Exception as e:
+            print(f"[PIPELINE] Error uploading screenshot for step {step.step_number}: {e}")
+
+    db.commit()
 
 
 def _describe_screenshots(steps: List, db: Session):
