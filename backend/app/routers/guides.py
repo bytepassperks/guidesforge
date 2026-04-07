@@ -142,6 +142,8 @@ def update_guide(
         guide.title = data.title
     if data.description is not None:
         guide.description = data.description
+    if data.status is not None:
+        guide.status = data.status
     if data.staleness_detection_enabled is not None:
         guide.staleness_detection_enabled = data.staleness_detection_enabled
     if data.is_public is not None:
