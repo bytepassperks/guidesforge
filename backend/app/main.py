@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import analytics, auth, billing, guides, help, pipeline, sdk, steps, workspace
+from app.routers import admin, analytics, auth, billing, guides, help, pipeline, sdk, steps, workspace
 
 
 @asynccontextmanager
@@ -67,6 +67,7 @@ app.include_router(analytics.router)
 app.include_router(sdk.router)
 app.include_router(help.router)
 app.include_router(pipeline.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

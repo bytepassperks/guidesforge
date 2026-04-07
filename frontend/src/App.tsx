@@ -16,6 +16,16 @@ import HelpCenter from "@/pages/HelpCenter"
 import HelpGuide from "@/pages/HelpGuide"
 import EmbedViewer from "@/pages/EmbedViewer"
 
+// Admin pages
+import AdminLogin from "@/pages/admin/AdminLogin"
+import AdminDashboard from "@/pages/admin/AdminDashboard"
+import AdminUsers from "@/pages/admin/AdminUsers"
+import AdminWorkspaces from "@/pages/admin/AdminWorkspaces"
+import AdminGuides from "@/pages/admin/AdminGuides"
+import AdminSubscriptions from "@/pages/admin/AdminSubscriptions"
+import AdminAnalytics from "@/pages/admin/AdminAnalytics"
+import AdminSettings from "@/pages/admin/AdminSettings"
+
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) {
@@ -61,6 +71,16 @@ function AppRoutes() {
 
       {/* Embed viewer */}
       <Route path="/embed/:guideId" element={<EmbedViewer />} />
+
+      {/* Admin routes */}
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/admin/users" element={<AdminUsers />} />
+      <Route path="/admin/workspaces" element={<AdminWorkspaces />} />
+      <Route path="/admin/guides" element={<AdminGuides />} />
+      <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
+      <Route path="/admin/analytics" element={<AdminAnalytics />} />
+      <Route path="/admin/settings" element={<AdminSettings />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

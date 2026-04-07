@@ -31,6 +31,7 @@ class User(Base):
     full_name = Column(String(255))
     plan = Column(String(50), default="free")
     plan_currency = Column(String(10), default="USD")
+    is_admin = Column(Boolean, default=False)
     voice_profile_url = Column(Text)
     avatar_photo_url = Column(Text)
     trial_ends_at = Column(DateTime)
