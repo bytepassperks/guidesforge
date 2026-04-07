@@ -25,6 +25,7 @@ class GuideCreate(BaseModel):
 class GuideUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    status: Optional[str] = None
     staleness_detection_enabled: Optional[bool] = None
     is_public: Optional[bool] = None
     help_center_published: Optional[bool] = None
