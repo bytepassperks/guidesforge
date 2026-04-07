@@ -44,14 +44,14 @@ class GuideStepResponse(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     script_text: Optional[str] = None
-    page_url: str
+    page_url: Optional[str] = None
     element_selector: Optional[str] = None
     click_x: Optional[int] = None
     click_y: Optional[int] = None
-    screenshot_url: str
+    screenshot_url: Optional[str] = None
     annotated_screenshot_url: Optional[str] = None
     audio_url: Optional[str] = None
-    pixel_diff_percentage: float = 0.0
+    pixel_diff_percentage: Optional[float] = 0.0
     is_stale: bool = False
     diff_image_url: Optional[str] = None
     detected_elements: Optional[dict] = None
