@@ -9,6 +9,14 @@ class ProcessGuideRequest(BaseModel):
     steps: List[Dict[str, Any]] = []
 
 
+class UploadRecordingRequest(BaseModel):
+    """Request from Chrome extension - creates guide and starts processing."""
+    title: str = "Untitled Guide"
+    steps: List[Dict[str, Any]] = []
+    rrweb_events: List[Dict[str, Any]] = []
+    duration_ms: Optional[int] = None
+
+
 class CheckStalenessRequest(BaseModel):
     guide_id: UUID
 
