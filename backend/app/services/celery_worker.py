@@ -185,7 +185,6 @@ def expire_trials_task(self):
 def regenerate_step_audio_task(self, guide_id: str, step_id: str):
     """Regenerate TTS audio for a single step."""
     from app.models.database import GuideStep, SessionLocal
-    from app.utils.s3 import upload_audio
 
     db = SessionLocal()
     try:
