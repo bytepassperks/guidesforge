@@ -88,6 +88,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           page_title: message.pageTitle || "",
           element_text: message.elementText || "",
           element_tag: message.elementTag || "",
+          click_x: message.clickX || null,
+          click_y: message.clickY || null,
           timestamp: Date.now(),
         });
         // Update badge with step count
@@ -285,6 +287,8 @@ async function uploadRecording(recording) {
           page_title: step.page_title,
           element_text: step.element_text,
           element_tag: step.element_tag,
+          click_x: step.click_x,
+          click_y: step.click_y,
         };
       }),
       rrweb_events: recording.events,

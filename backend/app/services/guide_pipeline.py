@@ -147,18 +147,15 @@ def _describe_screenshots(steps: List, db: Session):
 
 
 def _describe_step_from_metadata(step):
-    """Generate description from step metadata (page title, URL, element text)."""
-    parts = []
-
-    # Use element text if available
-    if hasattr(step, 'element_text') and step.element_text:
-        parts.append(f'Click on "{step.element_text}"')
-    elif hasattr(step, 'page_title') and step.page_title:
-        parts.append(f"Perform action on {step.page_title}")
+    """Generate description from step metadata (existing description, page URL)."""
+    # Use existing description from upload_recording if available
+    # (e.g. 'Click on "Login"' from the extension's describeClick function)
+    if step.description and step.description.strip():
+        description = step.description.strip()
+    elif step.page_url:
+        description = f"Perform action on {step.page_url}"
     else:
-        parts.append(f"Perform the action shown in step {step.step_number}")
-
-    description = parts[0] if parts else f"Step {step.step_number}"
+        description = f"Perform the action shown in step {step.step_number}"
 
     step.title = f"Step {step.step_number}"
     step.description = description
