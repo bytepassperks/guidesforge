@@ -16,6 +16,19 @@ async def lifespan(app: FastAPI):
     from app.models.database import Base, engine
     Base.metadata.create_all(bind=engine)
     print("[STARTUP] Database tables created/verified")
+
+    # Run lightweight column migrations for new fields
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE"
+            ))
+            conn.commit()
+            print("[STARTUP] Migration: is_admin column ensured on users table")
+        except Exception as e:
+            print(f"[STARTUP] Migration note: {e}")
+
     yield
     # Shutdown
     print("[SHUTDOWN] Cleaning up...")
