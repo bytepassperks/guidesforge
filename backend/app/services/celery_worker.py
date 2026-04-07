@@ -185,7 +185,6 @@ def expire_trials_task(self):
 def regenerate_step_audio_task(self, guide_id: str, step_id: str):
     """Regenerate TTS audio for a single step."""
     from app.models.database import GuideStep, SessionLocal
-    from app.utils.s3 import upload_audio
 
     db = SessionLocal()
     try:
@@ -195,9 +194,13 @@ def regenerate_step_audio_task(self, guide_id: str, step_id: str):
 
         try:
             import modal
-            generate_tts = modal.Function.lookup("guidesforge-inference", "generate_tts")
-            audio_bytes = generate_tts.remote(text=step.script_text, voice="af_heart")
-            audio_url = upload_audio(audio_bytes, guide_id, step.step_number)
+            tts_fn = modal.Function.from_name("guidesforge", "text_to_speech")
+            audio_url = tts_fn.remote(
+                text=step.script_text,
+                voice="af_heart",
+                guide_id=guide_id,
+                step_number=step.step_number,
+            )
             step.audio_url = audio_url
             db.commit()
             return {"step_id": step_id, "audio_url": audio_url}
@@ -209,10 +212,11 @@ def regenerate_step_audio_task(self, guide_id: str, step_id: str):
 
 @celery_app.task(bind=True, name="regenerate_step_callouts")
 def regenerate_step_callouts_task(self, guide_id: str, step_id: str):
-    """Regenerate annotated screenshot for a single step."""
+    """Regenerate annotated screenshot for a single step.
+    Uses click coordinates from the extension — zero API cost, no OpenAI."""
     import io
-    import json
 
+    import requests
     from PIL import Image, ImageDraw
 
     from app.models.database import GuideStep, SessionLocal
@@ -225,51 +229,60 @@ def regenerate_step_callouts_task(self, guide_id: str, step_id: str):
             return {"error": "Step not found or no screenshot"}
 
         try:
-            import openai
-            import requests
+            # Download the screenshot using presigned URL
+            # (iDrive E2 public URLs return 302 redirects)
+            from app.services.guide_pipeline import _get_presigned_url
+            presigned_url = _get_presigned_url(step.screenshot_url)
+            img_resp = requests.get(presigned_url, timeout=30)
+            if img_resp.status_code != 200:
+                return {"step_id": step_id, "error": "Failed to download screenshot"}
 
-            client = openai.OpenAI()
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": """Identify the main interactive UI element in this screenshot.
-Return JSON: {"elements": [{"type": "button|input|link|menu", "label": "...", "bbox": [x1, y1, x2, y2], "is_target": true}]}
-Coordinates as percentages (0-100).""",
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": step.screenshot_url, "detail": "high"},
-                        },
-                    ],
-                }],
-                response_format={"type": "json_object"},
-                max_tokens=500,
-            )
-            elements = json.loads(response.choices[0].message.content)
-            step.detected_elements = elements
-
-            # Draw annotations
-            img_resp = requests.get(step.screenshot_url)
             img = Image.open(io.BytesIO(img_resp.content))
             draw = ImageDraw.Draw(img)
+            w, h = img.size
 
-            for elem in elements.get("elements", []):
-                bbox = elem.get("bbox", [])
-                if len(bbox) == 4 and elem.get("is_target"):
-                    w, h = img.size
-                    x1 = int(bbox[0] * w / 100)
-                    y1 = int(bbox[1] * h / 100)
-                    x2 = int(bbox[2] * w / 100)
-                    y2 = int(bbox[3] * h / 100)
-                    for offset in range(3):
-                        draw.rectangle(
-                            [x1 - offset, y1 - offset, x2 + offset, y2 + offset],
-                            outline="#EF4444",
-                        )
+            # Use click coordinates from the extension
+            click_x = step.click_x
+            click_y = step.click_y
+
+            if click_x and click_y and click_x > 0 and click_y > 0:
+                cx = max(0, min(int(click_x), w - 1))
+                cy = max(0, min(int(click_y), h - 1))
+
+                # Draw red circle around click point
+                radius = max(20, min(w, h) // 40)
+                for offset in range(3):
+                    r = radius + offset
+                    draw.ellipse(
+                        [cx - r, cy - r, cx + r, cy + r],
+                        outline="#EF4444",
+                        width=2,
+                    )
+
+                # Draw arrow pointing to click
+                arrow_top_y = max(0, cy - radius - 30)
+                draw.line(
+                    [(cx, arrow_top_y), (cx, cy - radius - 5)],
+                    fill="#EF4444", width=3,
+                )
+                draw.polygon(
+                    [
+                        (cx, cy - radius - 2),
+                        (cx - 6, cy - radius - 12),
+                        (cx + 6, cy - radius - 12),
+                    ],
+                    fill="#EF4444",
+                )
+
+                # Step number label
+                label = str(step.step_number)
+                label_x = cx + radius + 8
+                label_y = cy - 10
+                draw.rectangle(
+                    [label_x - 2, label_y - 2, label_x + 18, label_y + 18],
+                    fill="#EF4444",
+                )
+                draw.text((label_x + 2, label_y), label, fill="white")
 
             buffer = io.BytesIO()
             img.save(buffer, format="PNG")

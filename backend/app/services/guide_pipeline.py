@@ -7,10 +7,41 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
-from app.utils.s3 import upload_annotated_screenshot, upload_screenshot, upload_video
+from app.utils.s3 import (
+    get_s3_client,
+    upload_annotated_screenshot,
+    upload_screenshot,
+    upload_video,
+)
 
 # Modal app name must match modal/app.py: modal.App("guidesforge")
 MODAL_APP_NAME = "guidesforge"
+
+
+def _get_presigned_url(s3_url: str, expiration: int = 3600) -> str:
+    """Convert an S3 public URL to a presigned URL for authenticated access.
+
+    iDrive E2's public endpoint returns 302 redirects for unauthenticated GET
+    requests, so we generate presigned URLs that go through the S3 API.
+    """
+    from app.config import settings
+
+    if not s3_url or not s3_url.startswith("http"):
+        return s3_url
+
+    # Extract S3 key from URL: {endpoint}/{bucket}/{key}
+    prefix = f"{settings.S3_ENDPOINT}/{settings.S3_BUCKET}/"
+    if s3_url.startswith(prefix):
+        key = s3_url[len(prefix):]
+    else:
+        return s3_url  # Not our S3 URL, return as-is
+
+    s3 = get_s3_client()
+    return s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.S3_BUCKET, "Key": key},
+        ExpiresIn=expiration,
+    )
 
 
 def enrich_guide_steps(guide_id: str, db: Session):
@@ -121,9 +152,12 @@ def _describe_screenshots(steps: List, db: Session):
     for step in steps:
         try:
             if step.screenshot_url and step.screenshot_url.startswith("http"):
+                # Generate presigned URL so Modal can download the screenshot
+                # (iDrive E2 public URLs return 302 redirects)
+                presigned_url = _get_presigned_url(step.screenshot_url)
                 # Use Modal AI vision to describe the screenshot
                 result = describe_fn.remote(
-                    screenshot_url=step.screenshot_url,
+                    screenshot_url=presigned_url,
                     context=f"Step {step.step_number} of a how-to guide. The user clicked at coordinates ({step.click_x}, {step.click_y}).",
                 )
                 step.title = f"Step {step.step_number}"
@@ -224,8 +258,10 @@ def _annotate_screenshots(steps: List, db: Session):
                 step.annotated_screenshot_url = step.screenshot_url
                 continue
 
-            # Download the screenshot
-            img_resp = req.get(step.screenshot_url, timeout=30)
+            # Download the screenshot using presigned URL
+            # (iDrive E2 public URLs return 302 redirects)
+            presigned_url = _get_presigned_url(step.screenshot_url)
+            img_resp = req.get(presigned_url, timeout=30)
             if img_resp.status_code != 200:
                 step.annotated_screenshot_url = step.screenshot_url
                 continue
@@ -309,10 +345,14 @@ def _assemble_video(guide, steps: List, db: Session):
 
     steps_data = []
     for step in steps:
+        # Use presigned URLs so Modal can download files
+        # (iDrive E2 public URLs return 302 redirects)
+        screenshot = step.annotated_screenshot_url or step.screenshot_url
+        audio = step.audio_url
         steps_data.append({
             "step_number": step.step_number,
-            "screenshot_url": step.annotated_screenshot_url or step.screenshot_url,
-            "audio_url": step.audio_url,
+            "screenshot_url": _get_presigned_url(screenshot) if screenshot else None,
+            "audio_url": _get_presigned_url(audio) if audio else None,
             "title": step.title,
         })
 
@@ -346,7 +386,7 @@ def _assemble_video_local(guide, steps: List, db: Session):
             img_url = step.annotated_screenshot_url or step.screenshot_url
             if not img_url or not img_url.startswith("http"):
                 continue
-            img_resp = req.get(img_url, timeout=30)
+            img_resp = req.get(_get_presigned_url(img_url), timeout=30)
             if img_resp.status_code != 200:
                 continue
             img_path = os.path.join(temp_dir, f"step_{i}.png")
@@ -357,7 +397,7 @@ def _assemble_video_local(guide, steps: List, db: Session):
             duration = 5.0
             audio_path = None
             if step.audio_url:
-                audio_resp = req.get(step.audio_url, timeout=30)
+                audio_resp = req.get(_get_presigned_url(step.audio_url), timeout=30)
                 if audio_resp.status_code == 200:
                     audio_path = os.path.join(temp_dir, f"step_{i}.wav")
                     with open(audio_path, "wb") as f:

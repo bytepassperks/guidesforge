@@ -45,10 +45,21 @@ tts_image = base_image.pip_install(
     "scipy==1.14.0",
 )
 
-# Vision image with transformers
-vision_image = base_image.pip_install(
-    "openai>=1.58.0",
-    "httpx>=0.28.0",
+# Vision image with moondream2 (free local vision model, no API cost)
+# v2: force container rebuild after replacing OpenAI with moondream2
+vision_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "transformers>=4.44.0",
+        "torch==2.6.0",
+        "Pillow==10.4.0",
+        "requests==2.32.3",
+        "boto3==1.35.0",
+        "einops",
+        "accelerate==1.0.0",
+    )
+    .apt_install("ffmpeg", "libsndfile1")
+    .run_commands("echo moondream2-v2")
 )
 
 # Whisper image for audio transcription (local model via faster-whisper, no API cost)
@@ -116,81 +127,76 @@ def download_from_url(url: str, local_path: str):
 
 @app.function(
     image=vision_image,
+    gpu="T4",
     secrets=[modal.Secret.from_name("guidesforge-secrets")],
-    timeout=120,
+    timeout=180,
 )
 def describe_screenshot(screenshot_url: str, context: str = "") -> str:
-    """Use GPT-4o-mini vision to describe what a screenshot shows."""
-    from openai import OpenAI
+    """Use moondream2 local vision model to describe what a screenshot shows.
+    Runs on T4 GPU — zero API cost, no OpenAI key needed."""
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from PIL import Image
+    import requests as req
+    import io
 
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+    # Download screenshot
+    resp = req.get(screenshot_url)
+    resp.raise_for_status()
+    img = Image.open(io.BytesIO(resp.content)).convert("RGB")
 
-    prompt = """Describe what action the user is performing in this screenshot.
-Be specific about which button, link, or input field they are interacting with.
-Write a single, clear sentence suitable for a step-by-step guide.
-Example: "Click the 'Settings' gear icon in the top-right corner of the dashboard."
-"""
-    if context:
-        prompt += f"\nContext: {context}"
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": screenshot_url}},
-                ],
-            }
-        ],
-        max_tokens=200,
+    # Load moondream2
+    model_id = "vikhyatk/moondream2"
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, trust_remote_code=True, torch_dtype="auto",
+        device_map="auto",
     )
+    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
 
-    return response.choices[0].message.content.strip()
+    prompt = "Describe what action the user is performing in this screenshot. Be specific about which button, link, or input field they are interacting with. Write a single, clear sentence suitable for a step-by-step guide."
+    if context:
+        prompt += f" {context}"
+
+    enc_image = model.encode_image(img)
+    result = model.answer_question(enc_image, prompt, tokenizer)
+
+    return result.strip() if result else "Interact with the element shown on screen."
 
 
 # ─── 2. Narration Script Generation ──────────────────────────────────────────
 
 @app.function(
-    image=vision_image,
+    image=base_image,
     secrets=[modal.Secret.from_name("guidesforge-secrets")],
     timeout=120,
 )
 def generate_narration_script(
     steps: list[dict], guide_title: str, language: str = "en"
 ) -> list[str]:
-    """Generate narration scripts for each step."""
-    from openai import OpenAI
+    """Generate narration scripts from step descriptions.
+    Uses template-based generation — zero API cost, no OpenAI key needed."""
+    narrations = []
+    for step in steps:
+        desc = step.get("description", "").strip()
+        step_num = step.get("step_number", 1)
 
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+        if not desc:
+            narrations.append(f"In step {step_num}, continue with the next action.")
+            continue
 
-    steps_text = "\n".join(
-        [f"Step {s['step_number']}: {s['description']}" for s in steps]
-    )
+        # Clean up description for narration
+        # Make it second-person and natural
+        narration = desc
+        # If it starts with a verb, add "you" prefix for narration
+        if narration[0].isupper() and not narration.lower().startswith("you "):
+            narration = f"Next, {narration[0].lower()}{narration[1:]}"
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": f"""You are a professional narrator for how-to guides.
-Generate clear, friendly narration scripts for each step.
-Language: {language}
-Keep each narration 1-2 sentences. Use second person ("you").
-Output a JSON array of strings, one per step.""",
-            },
-            {
-                "role": "user",
-                "content": f"Guide: {guide_title}\n\nSteps:\n{steps_text}\n\nGenerate narration for each step as a JSON array:",
-            },
-        ],
-        max_tokens=1000,
-        response_format={"type": "json_object"},
-    )
+        # Ensure it ends with a period
+        if not narration.endswith("."):
+            narration += "."
 
-    result = json.loads(response.choices[0].message.content)
-    return result.get("narrations", result.get("scripts", []))
+        narrations.append(narration)
+
+    return narrations
 
 
 # ─── 3. Text-to-Speech (Kokoro) ──────────────────────────────────────────────
@@ -636,10 +642,10 @@ def transcribe_audio(
     }
 
 
-# ─── 8. Detect UI Elements (OmniParser V2 via GPT-4o-mini Vision) ───────────
+# ─── 8. Detect UI Elements (Click-coordinate annotation, no API cost) ───────
 
 @app.function(
-    image=vision_image,
+    image=base_image,
     secrets=[modal.Secret.from_name("guidesforge-secrets")],
     timeout=120,
 )
@@ -650,47 +656,25 @@ def detect_ui_elements(
     guide_id: str = "",
     step_number: int = 0,
 ) -> dict:
-    """Detect UI elements in a screenshot and generate annotated callout image.
-    Uses GPT-4o-mini vision for element detection, then draws annotation overlays
-    (red bounding box, arrow, label) on the screenshot using Pillow.
-    Returns detected elements JSON and annotated screenshot URL.
+    """Annotate screenshot with click indicator and step number callout.
+    Uses click coordinates from the extension — zero API cost, no OpenAI key needed.
+    Draws a red circle at the click point with step number label.
+    Returns annotated screenshot URL.
     """
-    from openai import OpenAI
     from PIL import Image, ImageDraw
     import requests as req
     import io
 
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
-
-    # Detect UI elements via GPT-4o-mini vision
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": """Analyze this screenshot and identify ALL interactive UI elements visible.
-For each element, provide:
-- type: "button", "input", "link", "menu", "dropdown", "checkbox", "toggle", "tab", "icon"
-- label: the visible text or aria label
-- bbox: [x1, y1, x2, y2] as percentage coordinates (0-100) of image dimensions
-- is_target: true if this appears to be the main element the user would interact with
-
-Focus on the most prominent interactive element. Return JSON:
-{"elements": [{"type": "...", "label": "...", "bbox": [x1, y1, x2, y2], "is_target": true/false}]}""",
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {"url": screenshot_url, "detail": "high"},
-                },
-            ],
-        }],
-        response_format={"type": "json_object"},
-        max_tokens=800,
-    )
-
-    elements = json.loads(response.choices[0].message.content)
+    # Build elements list from click coordinates
+    elements = {"elements": []}
+    if click_x > 0 and click_y > 0:
+        elements["elements"].append({
+            "type": "click_target",
+            "label": f"Step {step_number}",
+            "click_x": click_x,
+            "click_y": click_y,
+            "is_target": True,
+        })
 
     # Download original screenshot
     img_resp = req.get(screenshot_url)
