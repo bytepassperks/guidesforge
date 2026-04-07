@@ -51,14 +51,39 @@ export default function HelpCenter() {
     )
   }
 
-  if (!helpCenter) {
+  if (!workspaceSlug || !helpCenter) {
     return (
-      <div className="min-h-screen bg-[#0C0D14] flex items-center justify-center">
-        <div className="text-center">
-          <BookOpen className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-white mb-2">Help Center Not Found</h1>
-          <p className="text-gray-400 text-sm">This help center doesn&apos;t exist or has been disabled.</p>
+      <div className="min-h-screen bg-[#0C0D14] text-white">
+        <div className="border-b border-white/5 bg-[#0E0F17]">
+          <div className="max-w-4xl mx-auto px-6 py-6">
+            <div className="flex items-center gap-3 mb-6">
+              <img src="/logo.png" alt="GuidesForge" className="w-8 h-8 rounded-lg" />
+              <span className="text-lg font-semibold text-indigo-400">GuidesForge</span>
+              <span className="text-gray-500 text-sm">Help Center</span>
+            </div>
+            <h1 className="text-3xl font-bold mb-4">How can we help?</h1>
+            <div className="relative max-w-xl">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search for guides, topics, or questions..."
+                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3.5 text-white placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition"
+                disabled
+              />
+            </div>
+          </div>
         </div>
+        <div className="max-w-4xl mx-auto px-6 py-16 text-center">
+          <BookOpen className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-400">No guides published yet</p>
+        </div>
+        <footer className="border-t border-white/5 py-6 mt-12">
+          <div className="max-w-4xl mx-auto px-6 flex items-center justify-between">
+            <p className="text-xs text-gray-600">
+              Powered by <a href="https://guidesforge.org" className="text-indigo-400 hover:text-indigo-300">GuidesForge</a>
+            </p>
+          </div>
+        </footer>
       </div>
     )
   }

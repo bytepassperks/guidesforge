@@ -56,6 +56,7 @@ function AppRoutes() {
       <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
 
       {/* Public help center */}
+      <Route path="/help" element={<HelpCenter />} />
       <Route path="/help/:workspaceSlug" element={<HelpCenter />} />
       <Route path="/help/:workspaceSlug/guides/:guideId" element={<HelpGuide />} />
 

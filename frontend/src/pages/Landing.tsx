@@ -453,23 +453,23 @@ export default function Landing() {
               <ul className="space-y-2 text-sm text-gray-500">
                 <li><a href="#features" className="hover:text-gray-300 transition">Features</a></li>
                 <li><a href="#pricing" className="hover:text-gray-300 transition">Pricing</a></li>
-                <li><Link to="/help" className="hover:text-gray-300 transition">Help Center</Link></li>
+                <li><Link to="/help/demo" className="hover:text-gray-300 transition">Help Center</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-gray-500">
                 <li><a href="mailto:support@guidesforge.org" className="hover:text-gray-300 transition">Support</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">Terms of Service</a></li>
+                <li><Link to="/privacy" className="hover:text-gray-300 transition">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="hover:text-gray-300 transition">Terms of Service</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white mb-4">Developers</h4>
               <ul className="space-y-2 text-sm text-gray-500">
-                <li><a href="/api/docs" className="hover:text-gray-300 transition">API Docs</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">Chrome Extension</a></li>
-                <li><a href="#" className="hover:text-gray-300 transition">SDK</a></li>
+                <li><a href="https://guidesforge-api.onrender.com/api/docs" className="hover:text-gray-300 transition" target="_blank" rel="noopener noreferrer">API Docs</a></li>
+                <li><a href="https://chrome.google.com/webstore" className="hover:text-gray-300 transition" target="_blank" rel="noopener noreferrer">Chrome Extension</a></li>
+                <li><Link to="/settings?tab=sdk" className="hover:text-gray-300 transition">SDK</Link></li>
               </ul>
             </div>
           </div>
