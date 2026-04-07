@@ -3,8 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.database import Guide, User, WorkspaceMember, get_db
-from app.schemas.pipeline import CheckStalenessRequest, JobStatusResponse, ProcessGuideRequest
+from app.models.database import Guide, GuideStep, User, Workspace, WorkspaceMember, get_db
+from app.schemas.pipeline import CheckStalenessRequest, JobStatusResponse, ProcessGuideRequest, UploadRecordingRequest
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
@@ -89,34 +89,63 @@ def get_job_status(task_id: str):
 
 @router.post("/upload-recording")
 async def upload_recording(
-    data: ProcessGuideRequest,
+    data: UploadRecordingRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Receive recording data from the Chrome extension and create a new guide."""
-    guide = db.query(Guide).filter(Guide.id == data.guide_id).first()
-    if not guide:
-        raise HTTPException(status_code=404, detail="Guide not found")
+    """Receive recording data from the Chrome extension.
 
+    Creates a new guide automatically from the recording title and steps,
+    then queues the AI pipeline for processing.
+    """
+    # Find the user's workspace
     member = db.query(WorkspaceMember).filter(
-        WorkspaceMember.workspace_id == guide.workspace_id,
         WorkspaceMember.user_id == current_user.id,
     ).first()
     if not member:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=400, detail="No workspace found for user")
 
-    guide.status = "processing"
+    workspace = db.query(Workspace).filter(Workspace.id == member.workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=400, detail="Workspace not found")
+
+    # Create the guide
+    guide = Guide(
+        workspace_id=workspace.id,
+        creator_id=current_user.id,
+        title=data.title or "Untitled Guide",
+        description=f"Recorded via Chrome extension ({len(data.steps)} steps)",
+        status="processing",
+        total_steps=len(data.steps),
+        total_duration_seconds=(data.duration_ms // 1000) if data.duration_ms else 0,
+    )
+    db.add(guide)
+    db.flush()
+
+    # Create guide steps from the recording data
+    for step_data in data.steps:
+        step = GuideStep(
+            guide_id=guide.id,
+            step_number=step_data.get("step_number", 0),
+            description=step_data.get("description", ""),
+            page_url=step_data.get("page_url", ""),
+            element_selector=step_data.get("dom_selector"),
+            screenshot_url=step_data.get("screenshot_data_url", ""),
+        )
+        db.add(step)
+
     db.commit()
+    db.refresh(guide)
 
     # Queue the full AI pipeline
     from app.services.celery_worker import process_guide_task
     task = process_guide_task.delay(
-        guide_id=str(data.guide_id),
+        guide_id=str(guide.id),
         steps_data=data.steps,
     )
 
     return {
         "message": "Recording uploaded and processing started",
         "task_id": task.id,
-        "guide_id": str(data.guide_id),
+        "guide_id": str(guide.id),
     }
