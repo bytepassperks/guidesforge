@@ -734,7 +734,56 @@ def admin_analytics(
     }
 
 
+# ---- Guide Reprocess ----
+
+@router.post("/guides/{guide_id}/reprocess")
+def reprocess_guide(
+    guide_id: uuid.UUID,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Reprocess a guide through the AI pipeline."""
+    guide = db.query(Guide).filter(Guide.id == guide_id).first()
+    if not guide:
+        raise HTTPException(status_code=404, detail="Guide not found")
+
+    guide.status = "processing"
+    guide.updated_at = datetime.utcnow()
+    db.commit()
+
+    # Trigger pipeline reprocessing
+    try:
+        from app.services.pipeline_service import trigger_guide_processing
+        trigger_guide_processing(str(guide_id))
+    except Exception:
+        pass  # Pipeline will pick it up via status check
+
+    return {
+        "id": str(guide.id),
+        "title": guide.title,
+        "status": guide.status,
+        "message": "Guide queued for reprocessing",
+    }
+
+
 # ---- System Settings ----
+
+@router.put("/settings")
+def update_settings(
+    data: dict,
+    admin: User = Depends(get_admin_user),
+):
+    """Update system settings (limited to safe fields)."""
+    import os
+    allowed = {"cors_origins", "frontend_url", "mailgun_domain"}
+    updated = {}
+    for key, value in data.items():
+        if key in allowed:
+            env_key = key.upper()
+            os.environ[env_key] = str(value)
+            updated[key] = value
+    return {"updated": updated, "message": "Settings updated (runtime only, restart will reset)"}
+
 
 @router.get("/settings")
 def get_settings(

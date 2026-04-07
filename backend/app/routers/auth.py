@@ -28,6 +28,115 @@ from app.utils.s3 import upload_voice_profile
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+@router.post("/forgot-password")
+def forgot_password(data: dict, db: Session = Depends(get_db)):
+    """Request a password reset link via email."""
+    email = data.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    user = db.query(User).filter(User.email == email).first()
+    # Always return success to prevent email enumeration
+    if user:
+        try:
+            from app.services.email_service import send_password_reset_email
+            reset_token = create_access_token({"sub": str(user.id), "purpose": "reset"}, expires_delta=timedelta(hours=1))
+            send_password_reset_email(user.email, reset_token)
+        except Exception:
+            pass
+
+    return {"message": "If an account with that email exists, we've sent a password reset link."}
+
+
+@router.post("/reset-password")
+def reset_password(data: dict, db: Session = Depends(get_db)):
+    """Reset password using a token from the forgot-password email."""
+    token = data.get("token")
+    new_password = data.get("new_password")
+
+    if not token or not new_password:
+        raise HTTPException(status_code=400, detail="Token and new password required")
+
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    payload = decode_token(token)
+    if payload.get("purpose") != "reset":
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.password_hash = hash_password(new_password)
+    user.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Password reset successfully"}
+
+
+@router.post("/contact-sales")
+def contact_sales(data: dict):
+    """Handle contact sales form submissions."""
+    name = data.get("name")
+    email = data.get("email")
+    company = data.get("company")
+    team_size = data.get("team_size")
+    message = data.get("message")
+
+    if not name or not email:
+        raise HTTPException(status_code=400, detail="Name and email are required")
+
+    # Send notification email to sales
+    try:
+        from app.services.email_service import send_email_mailgun
+        html = f"""
+        <div style="font-family: sans-serif; padding: 20px;">
+            <h2>New Sales Inquiry from GuidesForge</h2>
+            <p><strong>Name:</strong> {name}</p>
+            <p><strong>Email:</strong> {email}</p>
+            <p><strong>Company:</strong> {company or 'N/A'}</p>
+            <p><strong>Team Size:</strong> {team_size or 'N/A'}</p>
+            <p><strong>Message:</strong> {message or 'N/A'}</p>
+        </div>
+        """
+        send_email_mailgun("support@guidesforge.org", f"[Sales Inquiry] {name} from {company}", html)
+    except Exception:
+        pass
+
+    return {"message": "Thank you! We'll be in touch within 24 hours."}
+
+
+@router.post("/change-password")
+def change_password(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change password for authenticated user."""
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Current password and new password required")
+
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+
+    if not verify_password(current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.password_hash = hash_password(new_password)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Password changed successfully"}
+
+
 @router.post("/register", response_model=TokenResponse)
 def register(data: UserRegister, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == data.email).first()

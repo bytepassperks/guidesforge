@@ -147,12 +147,14 @@ export default function AdminUsers() {
                         <button
                           onClick={() => setEditUser(u)}
                           className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition"
+                          aria-label={`Edit user ${u.email}`}
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => { if (confirm(`Delete ${u.email}?`)) deleteMutation.mutate(u.id as string) }}
                           className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition"
+                          aria-label={`Delete user ${u.email}`}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -278,7 +280,7 @@ export default function AdminUsers() {
                 <button onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-xl text-sm text-gray-400 hover:text-white transition">Cancel</button>
                 <button
                   onClick={() => createMutation.mutate(newUser)}
-                  disabled={createMutation.isPending || !newUser.email || !newUser.password}
+                  disabled={createMutation.isPending || !newUser.email || !newUser.password || !newUser.full_name}
                   className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition disabled:opacity-50"
                 >
                   {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

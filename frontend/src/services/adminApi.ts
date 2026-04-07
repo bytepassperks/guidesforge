@@ -75,6 +75,7 @@ export const adminGuidesAPI = {
   update: (id: string, data: Record<string, unknown>) =>
     adminApi.put(`/api/admin/guides/${id}`, data),
   delete: (id: string) => adminApi.delete(`/api/admin/guides/${id}`),
+  reprocess: (id: string) => adminApi.post(`/api/admin/guides/${id}/reprocess`),
 }
 
 // Admin Subscriptions
@@ -88,6 +89,7 @@ export const adminSubscriptionsAPI = {
 // Admin Settings
 export const adminSettingsAPI = {
   get: () => adminApi.get("/api/admin/settings"),
+  update: (data: Record<string, unknown>) => adminApi.put("/api/admin/settings", data),
 }
 
 export default adminApi

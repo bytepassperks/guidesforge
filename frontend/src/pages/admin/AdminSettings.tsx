@@ -1,14 +1,37 @@
-import { useQuery } from "@tanstack/react-query"
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import AdminLayout from "@/components/layout/AdminLayout"
 import { adminSettingsAPI } from "@/services/adminApi"
-import { Settings, Loader2, CheckCircle, XCircle } from "lucide-react"
+import { Settings, Loader2, CheckCircle, XCircle, Save, CheckCircle2 } from "lucide-react"
 
 export default function AdminSettings() {
+  const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({
     queryKey: ["admin-settings"],
     queryFn: () => adminSettingsAPI.get(),
   })
   const settings = data?.data
+  const [corsOrigins, setCorsOrigins] = useState("")
+  const [frontendUrl, setFrontendUrl] = useState("")
+  const [mailgunDomain, setMailgunDomain] = useState("")
+  const [saved, setSaved] = useState(false)
+  const [initialized, setInitialized] = useState(false)
+
+  if (settings && !initialized) {
+    setCorsOrigins(settings.cors_origins || "")
+    setFrontendUrl(settings.frontend_url || "")
+    setMailgunDomain(settings.mailgun_domain || "")
+    setInitialized(true)
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => adminSettingsAPI.update({ cors_origins: corsOrigins, frontend_url: frontendUrl, mailgun_domain: mailgunDomain }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-settings"] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    },
+  })
 
   if (isLoading) {
     return (
@@ -49,15 +72,15 @@ export default function AdminSettings() {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Frontend URL</label>
-              <p className="text-sm text-white bg-white/5 rounded-xl px-4 py-2.5">{settings?.frontend_url || "—"}</p>
+              <input type="text" value={frontendUrl} onChange={(e) => setFrontendUrl(e.target.value)} className="w-full text-sm text-white bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-red-500 transition" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">CORS Origins</label>
-              <p className="text-sm text-white bg-white/5 rounded-xl px-4 py-2.5 truncate">{settings?.cors_origins || "—"}</p>
+              <input type="text" value={corsOrigins} onChange={(e) => setCorsOrigins(e.target.value)} className="w-full text-sm text-white bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-red-500 transition" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Mailgun Domain</label>
-              <p className="text-sm text-white bg-white/5 rounded-xl px-4 py-2.5">{settings?.mailgun_domain || "—"}</p>
+              <input type="text" value={mailgunDomain} onChange={(e) => setMailgunDomain(e.target.value)} className="w-full text-sm text-white bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-red-500 transition" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">S3 Endpoint</label>
@@ -67,6 +90,17 @@ export default function AdminSettings() {
               <label className="block text-xs text-gray-500 mb-1">S3 Bucket</label>
               <p className="text-sm text-white bg-white/5 rounded-xl px-4 py-2.5">{settings?.s3_bucket || "—"}</p>
             </div>
+          </div>
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition"
+            >
+              {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save Settings
+            </button>
+            {saved && <span className="flex items-center gap-1 text-green-400 text-sm"><CheckCircle2 className="w-4 h-4" /> Saved</span>}
           </div>
         </div>
 

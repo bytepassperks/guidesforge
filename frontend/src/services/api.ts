@@ -66,6 +66,10 @@ export const authAPI = {
       headers: { "Content-Type": "multipart/form-data" },
     })
   },
+  forgotPassword: (email: string) =>
+    api.post("/api/auth/forgot-password", { email }),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    api.post("/api/auth/change-password", data),
 }
 
 // Guides

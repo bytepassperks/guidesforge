@@ -105,12 +105,14 @@ export default function AdminWorkspaces() {
                         <Link
                           to={`/admin/workspaces/${ws.id}`}
                           className="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-white transition"
+                          aria-label={`View workspace ${ws.name}`}
                         >
                           <Eye className="w-4 h-4" />
                         </Link>
                         <button
                           onClick={() => { if (confirm(`Delete workspace "${ws.name}"?`)) deleteMutation.mutate(ws.id as string) }}
                           className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition"
+                          aria-label={`Delete workspace ${ws.name}`}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

@@ -6,6 +6,8 @@ import { ReactNode } from "react"
 import Landing from "@/pages/Landing"
 import Login from "@/pages/Login"
 import Register from "@/pages/Register"
+import ForgotPassword from "@/pages/ForgotPassword"
+import ResetPassword from "@/pages/ResetPassword"
 import Dashboard from "@/pages/Dashboard"
 import GuideEditor from "@/pages/GuideEditor"
 import GuideViewer from "@/pages/GuideViewer"
@@ -15,6 +17,10 @@ import Billing from "@/pages/Billing"
 import HelpCenter from "@/pages/HelpCenter"
 import HelpGuide from "@/pages/HelpGuide"
 import EmbedViewer from "@/pages/EmbedViewer"
+import Privacy from "@/pages/Privacy"
+import Terms from "@/pages/Terms"
+import ContactSales from "@/pages/ContactSales"
+import NotFound from "@/pages/NotFound"
 
 // Admin pages
 import AdminLogin from "@/pages/admin/AdminLogin"
@@ -56,6 +62,11 @@ function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/contact-sales" element={<ContactSales />} />
 
       {/* Protected routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -83,7 +94,7 @@ function AppRoutes() {
       <Route path="/admin/settings" element={<AdminSettings />} />
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

@@ -20,7 +20,7 @@ const navItems = [
   { icon: CreditCard, label: "Billing", path: "/billing" },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { user, logout } = useAuth()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -48,6 +48,7 @@ export default function Sidebar() {
             <Link
               key={item.path}
               to={item.path}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition",
                 active
