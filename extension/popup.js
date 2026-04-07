@@ -27,7 +27,6 @@ function showState(state) {
   idleState.classList.toggle("hidden", state !== "idle");
   recordingState.classList.toggle("hidden", state !== "recording");
   doneState.classList.toggle("hidden", state !== "done");
-  // Show user info when logged in (any state except login)
   userInfo.classList.toggle("hidden", state === "login");
 }
 
@@ -40,13 +39,12 @@ async function init() {
     return;
   }
 
-  // Set user email display
   if (userEmail) {
     userEmailEl.textContent = userEmail;
   }
 
-  // Check if currently recording
-  chrome.runtime.sendMessage({ type: "GET_STATE" }, (response) => {
+  // Check if currently recording - query background for state
+  chrome.runtime.sendMessage({ type: "GET_STATE" }, function(response) {
     if (chrome.runtime.lastError) {
       showState("idle");
       return;
@@ -54,6 +52,13 @@ async function init() {
     if (response && response.isRecording) {
       showState("recording");
       stepsCount.textContent = response.stepsCount || "0";
+      // Also update pause button state if paused
+      if (response.isPaused) {
+        var pauseBtn = document.getElementById("pause-btn");
+        if (pauseBtn) {
+          pauseBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg> Resume';
+        }
+      }
     } else {
       showState("idle");
     }
@@ -63,7 +68,7 @@ async function init() {
 init();
 
 // Login
-loginBtn.addEventListener("click", async () => {
+loginBtn.addEventListener("click", async function() {
   const email = loginEmail.value.trim();
   const password = loginPassword.value;
 
@@ -81,25 +86,23 @@ loginBtn.addEventListener("click", async () => {
     const res = await fetch(API_BASE + "/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email, password: password }),
     });
 
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(function() { return {}; });
       throw new Error(data.detail || "Invalid email or password");
     }
 
     const data = await res.json();
     const token = data.access_token;
 
-    // Store token and email
     await chrome.storage.local.set({
       authToken: token,
       userEmail: email,
     });
 
-    // Also tell background script
-    chrome.runtime.sendMessage({ type: "SET_AUTH_TOKEN", token });
+    chrome.runtime.sendMessage({ type: "SET_AUTH_TOKEN", token: token });
 
     userEmailEl.textContent = email;
     showState("idle");
@@ -113,76 +116,76 @@ loginBtn.addEventListener("click", async () => {
 });
 
 // Allow Enter key to submit login
-loginPassword.addEventListener("keydown", (e) => {
+loginPassword.addEventListener("keydown", function(e) {
   if (e.key === "Enter") loginBtn.click();
 });
-loginEmail.addEventListener("keydown", (e) => {
+loginEmail.addEventListener("keydown", function(e) {
   if (e.key === "Enter") loginPassword.focus();
 });
 
 // Logout
-logoutBtn.addEventListener("click", async () => {
+logoutBtn.addEventListener("click", async function() {
   await chrome.storage.local.remove(["authToken", "userEmail"]);
   showState("login");
 });
 
 // Start recording
-startBtn.addEventListener("click", async () => {
+startBtn.addEventListener("click", async function() {
   const title = titleInput.value.trim() || "Untitled Guide";
 
   // Get current active tab
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) return;
 
-  // Inject content script if not already injected
-  try {
-    await chrome.tabs.sendMessage(tab.id, { type: "PING" });
-  } catch {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content.js"],
-    });
-  }
+  startBtn.disabled = true;
+  startBtn.textContent = "Starting...";
 
+  // Tell background to start recording
+  // Background will inject content script and send START_RRWEB automatically
   chrome.runtime.sendMessage(
-    { type: "START_RECORDING", title, tabId: tab.id },
-    () => {
+    { type: "START_RECORDING", title: title, tabId: tab.id },
+    function() {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg> Start Recording';
       showState("recording");
       stepsCount.textContent = "0";
-
-      // Start rrweb in content script
-      chrome.tabs.sendMessage(tab.id, { type: "START_RRWEB" });
     }
   );
 });
 
 // Stop recording
-stopBtn.addEventListener("click", () => {
+stopBtn.addEventListener("click", function() {
   stopBtn.disabled = true;
   stopBtn.textContent = "Uploading...";
-  chrome.runtime.sendMessage({ type: "STOP_RECORDING" }, (response) => {
+  chrome.runtime.sendMessage({ type: "STOP_RECORDING" }, function(response) {
     stopBtn.disabled = false;
-    showState("done");
+    stopBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg> Stop &amp; Upload';
+    if (response && response.success) {
+      showState("done");
+    } else {
+      showState("done");
+      // Show error in done state if needed
+    }
   });
 });
 
 // Cancel recording
-cancelBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "CANCEL_RECORDING" }, () => {
+cancelBtn.addEventListener("click", function() {
+  chrome.runtime.sendMessage({ type: "CANCEL_RECORDING" }, function() {
     showState("idle");
   });
 });
 
 // New recording
-newBtn.addEventListener("click", () => {
+newBtn.addEventListener("click", function() {
   showState("idle");
   titleInput.value = "";
 });
 
 // Poll for step count updates while recording
-setInterval(() => {
+setInterval(function() {
   if (!recordingState.classList.contains("hidden")) {
-    chrome.runtime.sendMessage({ type: "GET_STATE" }, (response) => {
+    chrome.runtime.sendMessage({ type: "GET_STATE" }, function(response) {
       if (chrome.runtime.lastError) return;
       if (response && response.stepsCount !== undefined) {
         stepsCount.textContent = String(response.stepsCount);

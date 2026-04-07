@@ -6,6 +6,7 @@ const API_BASE = "https://guidesforge-api.onrender.com/api";
 
 // Recording state
 let isRecording = false;
+let isPaused = false;
 let currentRecording = {
   id: null,
   title: "",
@@ -21,14 +22,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "GET_STATE":
       sendResponse({
         isRecording,
+        isPaused,
         stepsCount: currentRecording.steps.length,
         title: currentRecording.title,
+        tabId: currentRecording.tabId,
       });
       return true;
 
     case "START_RECORDING":
-      startRecording(message.title, message.tabId || sender.tab?.id);
-      sendResponse({ success: true });
+      startRecording(message.title, message.tabId || sender.tab?.id).then(function() {
+        sendResponse({ success: true });
+      });
       return true;
 
     case "STOP_RECORDING":
@@ -40,18 +44,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
       return true;
 
+    case "TOGGLE_PAUSE":
+      isPaused = !!message.isPaused;
+      if (isPaused) {
+        chrome.action.setBadgeText({ text: "||" });
+        chrome.action.setBadgeBackgroundColor({ color: "#F59E0B" });
+      } else {
+        chrome.action.setBadgeText({ text: String(currentRecording.steps.length) });
+        chrome.action.setBadgeBackgroundColor({ color: "#EF4444" });
+      }
+      sendResponse({ success: true, isPaused });
+      return true;
+
     case "RRWEB_EVENT":
-      if (isRecording) {
+      if (isRecording && !isPaused) {
         currentRecording.events.push(message.event);
       }
       sendResponse({ received: true });
       return true;
 
     case "STEP_CAPTURED":
-      if (isRecording) {
+      if (isRecording && !isPaused) {
+        const stepNum = message.stepNumber || currentRecording.steps.length + 1;
         currentRecording.steps.push({
-          step_number: currentRecording.steps.length + 1,
-          screenshot_data_url: message.screenshot,
+          step_number: stepNum,
+          screenshot_data_url: message.screenshot || null,
           description: message.description || "",
           dom_selector: message.selector || null,
           page_url: message.url || "",
@@ -60,7 +77,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           element_tag: message.elementTag || "",
           timestamp: Date.now(),
         });
-        // Update badge
+        // Update badge with step count
         chrome.action.setBadgeText({
           text: String(currentRecording.steps.length),
         });
@@ -84,8 +101,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-function startRecording(title, tabId) {
+async function startRecording(title, tabId) {
   isRecording = true;
+  isPaused = false;
   currentRecording = {
     id: crypto.randomUUID(),
     title: title || "Untitled Guide",
@@ -99,22 +117,70 @@ function startRecording(title, tabId) {
   chrome.action.setBadgeBackgroundColor({ color: "#EF4444" });
   chrome.action.setBadgeText({ text: "REC" });
 
-  // Inject recording into active tab
+  // Inject content script and start recording on the tab
   if (tabId) {
-    chrome.tabs.sendMessage(tabId, { type: "START_RRWEB" });
+    // First try to ping the content script to see if it's already loaded
+    let contentScriptReady = false;
+    try {
+      await new Promise(function(resolve, reject) {
+        chrome.tabs.sendMessage(tabId, { type: "PING" }, function(response) {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            contentScriptReady = true;
+            resolve(response);
+          }
+        });
+      });
+    } catch (e) {
+      console.log("GuidesForge: Content script not found, injecting...");
+    }
+
+    // If content script is not loaded, inject it
+    if (!contentScriptReady) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          files: ["content.js"],
+        });
+        // Wait for content script to initialize
+        await new Promise(function(r) { setTimeout(r, 300); });
+      } catch (e) {
+        console.log("GuidesForge: Could not inject content script:", e.message);
+      }
+    }
+
+    // Send START_RRWEB to content script (shows countdown + floating widget)
+    try {
+      await new Promise(function(resolve, reject) {
+        chrome.tabs.sendMessage(tabId, { type: "START_RRWEB", withCountdown: true }, function(response) {
+          if (chrome.runtime.lastError) {
+            console.log("GuidesForge: START_RRWEB failed:", chrome.runtime.lastError.message);
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            console.log("GuidesForge: START_RRWEB sent successfully:", JSON.stringify(response));
+            resolve(response);
+          }
+        });
+      });
+    } catch (e) {
+      console.log("GuidesForge: Could not send START_RRWEB:", e.message);
+    }
   }
 }
 
 async function stopRecording() {
   if (!isRecording) return { success: false, error: "Not recording" };
 
+  const tabId = currentRecording.tabId;
   isRecording = false;
+  isPaused = false;
   chrome.action.setBadgeText({ text: "" });
 
-  // Stop rrweb in content script
-  if (currentRecording.tabId) {
+  // Stop rrweb and floating widget in content script
+  if (tabId) {
     try {
-      chrome.tabs.sendMessage(currentRecording.tabId, { type: "STOP_RRWEB" });
+      chrome.tabs.sendMessage(tabId, { type: "STOP_RRWEB" });
     } catch (e) {
       // Tab might be closed
     }
@@ -137,7 +203,7 @@ async function stopRecording() {
   } catch (error) {
     // Store locally if upload fails
     await chrome.storage.local.set({
-      [`pending_${recording.id}`]: recording,
+      ["pending_" + recording.id]: recording,
     });
     return {
       success: false,
@@ -148,7 +214,9 @@ async function stopRecording() {
 }
 
 function cancelRecording() {
+  const tabId = currentRecording.tabId;
   isRecording = false;
+  isPaused = false;
   currentRecording = {
     id: null,
     title: "",
@@ -158,38 +226,48 @@ function cancelRecording() {
     tabId: null,
   };
   chrome.action.setBadgeText({ text: "" });
+
+  // Tell content script to cancel
+  if (tabId) {
+    try {
+      chrome.tabs.sendMessage(tabId, { type: "CANCEL_RRWEB" });
+    } catch (e) {
+      // Tab might be closed
+    }
+  }
 }
 
 async function uploadRecording(recording) {
   const { authToken } = await chrome.storage.local.get("authToken");
   if (!authToken) throw new Error("Not authenticated");
 
-  // First, create the guide
-  const guideRes = await fetch(`${API_BASE}/pipeline/upload-recording`, {
+  const guideRes = await fetch(API_BASE + "/pipeline/upload-recording", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
+      Authorization: "Bearer " + authToken,
     },
     body: JSON.stringify({
       title: recording.title,
-      steps: recording.steps.map((step) => ({
-        step_number: step.step_number,
-        screenshot_data_url: step.screenshot_data_url,
-        description: step.description,
-        dom_selector: step.dom_selector,
-        page_url: step.page_url,
-        page_title: step.page_title,
-        element_text: step.element_text,
-        element_tag: step.element_tag,
-      })),
+      steps: recording.steps.map(function(step) {
+        return {
+          step_number: step.step_number,
+          screenshot_data_url: step.screenshot_data_url,
+          description: step.description,
+          dom_selector: step.dom_selector,
+          page_url: step.page_url,
+          page_title: step.page_title,
+          element_text: step.element_text,
+          element_tag: step.element_tag,
+        };
+      }),
       rrweb_events: recording.events,
       duration_ms: Date.now() - recording.startTime,
     }),
   });
 
   if (!guideRes.ok) {
-    throw new Error(`Upload failed: ${guideRes.status}`);
+    throw new Error("Upload failed: " + guideRes.status);
   }
 
   return await guideRes.json();
