@@ -2,7 +2,7 @@
 // Manages recording state, receives events from content scripts,
 // and uploads completed recordings to the GuidesForge API.
 
-const API_BASE = "https://guidesforge.org/api";
+const API_BASE = "https://guidesforge-api.onrender.com/api";
 
 // Recording state
 let isRecording = false;
@@ -27,7 +27,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case "START_RECORDING":
-      startRecording(message.title, sender.tab?.id);
+      startRecording(message.title, message.tabId || sender.tab?.id);
       sendResponse({ success: true });
       return true;
 
@@ -71,6 +71,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "SET_AUTH_TOKEN":
       chrome.storage.local.set({ authToken: message.token });
       sendResponse({ success: true });
+      return true;
+
+    case "CAPTURE_TAB":
+      chrome.tabs.captureVisibleTab(null, { format: "png", quality: 80 }, (dataUrl) => {
+        sendResponse({ dataUrl: dataUrl || null });
+      });
       return true;
 
     default:
