@@ -229,8 +229,11 @@ def regenerate_step_callouts_task(self, guide_id: str, step_id: str):
             return {"error": "Step not found or no screenshot"}
 
         try:
-            # Download the screenshot
-            img_resp = requests.get(step.screenshot_url, timeout=30)
+            # Download the screenshot using presigned URL
+            # (iDrive E2 public URLs return 302 redirects)
+            from app.services.guide_pipeline import _get_presigned_url
+            presigned_url = _get_presigned_url(step.screenshot_url)
+            img_resp = requests.get(presigned_url, timeout=30)
             if img_resp.status_code != 200:
                 return {"step_id": step_id, "error": "Failed to download screenshot"}
 
