@@ -36,7 +36,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case "STOP_RECORDING":
-      stopRecording().then((result) => sendResponse(result));
+      // Respond immediately so the floating widget can show "Uploading..." state
+      // The upload happens in the background
+      stopRecording().then(function(result) {
+        // Notify popup if it's open
+        try {
+          chrome.runtime.sendMessage({ type: "UPLOAD_COMPLETE", result: result });
+        } catch (e) { /* popup might not be open */ }
+      });
+      sendResponse({ success: true, uploading: true });
       return true;
 
     case "CANCEL_RECORDING":
@@ -180,7 +188,14 @@ async function stopRecording() {
   // Stop rrweb and floating widget in content script
   if (tabId) {
     try {
-      chrome.tabs.sendMessage(tabId, { type: "STOP_RRWEB" });
+      await new Promise(function(resolve) {
+        chrome.tabs.sendMessage(tabId, { type: "STOP_RRWEB" }, function() {
+          if (chrome.runtime.lastError) {
+            console.log("GuidesForge: STOP_RRWEB error:", chrome.runtime.lastError.message);
+          }
+          resolve();
+        });
+      });
     } catch (e) {
       // Tab might be closed
     }

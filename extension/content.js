@@ -199,13 +199,39 @@
       e.stopPropagation(); togglePause();
     });
     floatingWidget.querySelector(".gf-btn-stop").addEventListener("click", function(e) {
-      e.stopPropagation(); chrome.runtime.sendMessage({ type: "STOP_RECORDING" });
+      e.stopPropagation();
+      // Show uploading state on widget
+      var stopBtnEl = floatingWidget.querySelector(".gf-btn-stop");
+      var recLabel = floatingWidget.querySelector(".gf-rec-label");
+      var recDot = floatingWidget.querySelector(".gf-rec-dot");
+      var pauseBtnEl = floatingWidget.querySelector(".gf-btn-pause");
+      var cancelBtnEl = floatingWidget.querySelector(".gf-btn-cancel");
+      if (stopBtnEl) { stopBtnEl.innerHTML = '<span>Uploading...</span>'; stopBtnEl.disabled = true; stopBtnEl.style.opacity = '0.6'; }
+      if (recLabel) { recLabel.textContent = 'Uploading'; }
+      if (recDot) { recDot.style.background = '#818cf8'; recDot.style.animation = 'none'; }
+      if (pauseBtnEl) { pauseBtnEl.style.display = 'none'; }
+      if (cancelBtnEl) { cancelBtnEl.style.display = 'none'; }
+
+      // Tell background to stop recording and upload
+      // Background will send STOP_RRWEB back to us which triggers stopRecordingFlow()
+      // We also set a timeout to remove widget in case STOP_RRWEB doesn't arrive
+      chrome.runtime.sendMessage({ type: "STOP_RECORDING" }, function(response) {
+        // Give the STOP_RRWEB message time to arrive and clean up,
+        // but if it doesn't, clean up after 8 seconds (upload timeout)
+        setTimeout(function() {
+          if (floatingWidget) {
+            stopRecordingFlow();
+            removeAllAnnotations();
+          }
+        }, 8000);
+      });
     });
     floatingWidget.querySelector(".gf-btn-cancel").addEventListener("click", function(e) {
       e.stopPropagation();
-      chrome.runtime.sendMessage({ type: "CANCEL_RECORDING" });
-      removeFloatingWidget(); removeAllAnnotations();
-      isRecording = false; isPaused = false;
+      chrome.runtime.sendMessage({ type: "CANCEL_RECORDING" }, function() {
+        removeFloatingWidget(); removeAllAnnotations();
+        isRecording = false; isPaused = false;
+      });
     });
   }
 
