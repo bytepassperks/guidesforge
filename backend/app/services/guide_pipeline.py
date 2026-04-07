@@ -3,12 +3,11 @@ import base64
 import io
 import json
 from datetime import datetime
-from typing import Dict, List
+from typing import List
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.utils.s3 import upload_annotated_screenshot, upload_audio, upload_screenshot, upload_video
+from app.utils.s3 import upload_annotated_screenshot, upload_screenshot, upload_video
 
 # Modal app name must match modal/app.py: modal.App("guidesforge")
 MODAL_APP_NAME = "guidesforge"
@@ -219,8 +218,8 @@ def _annotate_screenshots(steps: List, db: Session):
     a red circle/arrow annotation on each screenshot.
     """
     try:
-        from PIL import Image, ImageDraw
         import requests as req
+        from PIL import Image, ImageDraw
     except ImportError:
         print("[PIPELINE] Pillow not available, skipping annotations")
         for step in steps:
