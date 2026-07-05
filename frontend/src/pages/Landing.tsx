@@ -475,11 +475,21 @@ export default function Landing() {
           </div>
           <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-xs text-gray-600">&copy; 2026 GuidesForge. All rights reserved.</p>
-            <div className="flex items-center gap-4 text-xs text-gray-600">
-              <span>Built with AI</span>
-              <span>&middot;</span>
-              <span>support@guidesforge.org</span>
-            </div>
+              <div className="flex flex-col items-center gap-3 text-xs text-gray-600 md:items-end">
+                <a href="https://getlaunchpod.com/product/guidesforge" className="inline-flex">
+                  <img
+                    src="https://getlaunchpod.com/badge/guidesforge"
+                    alt="Featured on GetLaunchPod"
+                    className="h-8 w-auto"
+                    loading="lazy"
+                  />
+                </a>
+                <div className="flex items-center gap-4">
+                  <span>Built with AI</span>
+                  <span>&middot;</span>
+                  <span>support@guidesforge.org</span>
+                </div>
+              </div>
           </div>
         </div>
       </footer>
